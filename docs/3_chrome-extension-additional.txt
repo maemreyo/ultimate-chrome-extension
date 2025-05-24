@@ -1,0 +1,902 @@
+// ===== HOOKS =====
+// src/hooks/useStorage.ts
+import { useStorage as usePlasmoStorage } from "@plasmohq/storage/hook"
+import type { StorageKeys } from "~core/storage"
+
+export function useStorage<K extends keyof StorageKeys>(
+  key: K,
+  initialValue?: StorageKeys[K]
+) {
+  return usePlasmoStorage<StorageKeys[K]>(key, initialValue)
+}
+
+// src/hooks/useMessage.ts
+import { useMessage as usePlasmoMessage } from "@plasmohq/messaging/hook"
+import { sendToBackground } from "@plasmohq/messaging"
+
+export function useBackgroundMessage<TReq = any, TRes = any>(
+  name: string,
+  body?: TReq
+) {
+  return usePlasmoMessage<TReq, TRes>(async (req, res) => {
+    const response = await sendToBackground({
+      name,
+      body: body || req.body
+    })
+    res.send(response)
+  })
+}
+
+// src/hooks/useAuth.ts
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { sendToBackground } from "@plasmohq/messaging"
+import { useStorage } from "./useStorage"
+
+export function useAuth() {
+  const [user, setUser] = useStorage("user")
+  const queryClient = useQueryClient()
+  
+  const { data: isAuthenticated, isLoading } = useQuery({
+    queryKey: ["auth", "status"],
+    queryFn: async () => {
+      const response = await sendToBackground({
+        name: "auth",
+        body: { action: "check" }
+      })
+      return response.isAuthenticated
+    }
+  })
+  
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { email: string; password: string }) => {
+      const response = await sendToBackground({
+        name: "auth",
+        body: { action: "login", credentials }
+      })
+      if (!response.success) throw new Error(response.error)
+      return response.user
+    },
+    onSuccess: (user) => {
+      setUser(user)
+      queryClient.invalidateQueries({ queryKey: ["auth"] })
+    }
+  })
+  
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await sendToBackground({
+        name: "auth",
+        body: { action: "logout" }
+      })
+      if (!response.success) throw new Error(response.error)
+    },
+    onSuccess: () => {
+      setUser(undefined)
+      queryClient.invalidateQueries({ queryKey: ["auth"] })
+    }
+  })
+  
+  return {
+    user,
+    isAuthenticated,
+    isLoading,
+    login: loginMutation.mutate,
+    logout: logoutMutation.mutate,
+    isLoggingIn: loginMutation.isPending,
+    isLoggingOut: logoutMutation.isPending
+  }
+}
+
+// src/hooks/useTheme.ts
+import { useEffect, useState } from "react"
+import { useStorage } from "./useStorage"
+
+export function useTheme() {
+  const [settings] = useStorage("settings")
+  const [theme, setTheme] = useState<"light" | "dark">("light")
+  
+  useEffect(() => {
+    const root = document.documentElement
+    
+    if (settings?.theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+      setTheme(mediaQuery.matches ? "dark" : "light")
+      
+      const handler = (e: MediaQueryListEvent) => {
+        setTheme(e.matches ? "dark" : "light")
+      }
+      
+      mediaQuery.addEventListener("change", handler)
+      return () => mediaQuery.removeEventListener("change", handler)
+    } else {
+      setTheme(settings?.theme || "light")
+    }
+  }, [settings?.theme])
+  
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark")
+  }, [theme])
+  
+  return theme
+}
+
+// ===== POPUP TABS =====
+// src/popup/tabs/home.tsx
+import { useAuth } from "~hooks/useAuth"
+import { Button } from "~components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { useQuery } from "@tanstack/react-query"
+import { sendToBackground } from "@plasmohq/messaging"
+
+export function HomeTab() {
+  const { user, isAuthenticated } = useAuth()
+  
+  const { data: stats } = useQuery({
+    queryKey: ["stats"],
+    queryFn: async () => {
+      const response = await sendToBackground({
+        name: "api",
+        body: {
+          endpoint: "/stats",
+          method: "GET"
+        }
+      })
+      return response.data
+    },
+    enabled: isAuthenticated
+  })
+  
+  if (!isAuthenticated) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome!</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground mb-4">
+            Please log in to access all features.
+          </p>
+          <Button
+            onClick={() => chrome.runtime.openOptionsPage()}
+          >
+            Go to Settings
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Hello, {user?.name}!</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Actions</p>
+              <p className="text-2xl font-bold">{stats?.totalActions || 0}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Sites Visited</p>
+              <p className="text-2xl font-bold">{stats?.sitesVisited || 0}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            chrome.tabs.create({ url: chrome.runtime.getURL("tabs/dashboard.html") })
+          }}
+        >
+          Open Dashboard
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            chrome.runtime.sendMessage({ action: "sync-data" })
+          }}
+        >
+          Sync Data
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// src/popup/tabs/data.tsx
+import { useState } from "react"
+import { useQuery, useMutation } from "@tanstack/react-query"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Card } from "~components/ui/card"
+import { sendToBackground } from "@plasmohq/messaging"
+
+export function DataTab() {
+  const [searchTerm, setSearchTerm] = useState("")
+  
+  const { data: items, refetch } = useQuery({
+    queryKey: ["data", searchTerm],
+    queryFn: async () => {
+      const response = await sendToBackground({
+        name: "api",
+        body: {
+          endpoint: `/data?search=${searchTerm}`,
+          method: "GET"
+        }
+      })
+      return response.data
+    }
+  })
+  
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await sendToBackground({
+        name: "api",
+        body: {
+          endpoint: `/data/${id}`,
+          method: "DELETE"
+        }
+      })
+    },
+    onSuccess: () => refetch()
+  })
+  
+  return (
+    <div className="space-y-4">
+      <Input
+        placeholder="Search data..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+      
+      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+        {items?.map((item: any) => (
+          <Card key={item.id} className="p-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-medium">{item.title}</h4>
+                <p className="text-sm text-muted-foreground">{item.url}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => deleteMutation.mutate(item.id)}
+              >
+                Delete
+              </Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// src/popup/tabs/settings.tsx
+import { useStorage } from "~hooks/useStorage"
+import { useAuth } from "~hooks/useAuth"
+import { Button } from "~components/ui/button"
+import { Switch } from "~components/ui/switch"
+import { Label } from "~components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~components/ui/select"
+
+export function SettingsTab() {
+  const [settings, setSettings] = useStorage("settings")
+  const { user, logout, isAuthenticated } = useAuth()
+  
+  const updateSetting = (key: string, value: any) => {
+    setSettings({
+      ...settings,
+      [key]: value
+    })
+  }
+  
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <h3 className="font-medium">Appearance</h3>
+        <div className="space-y-2">
+          <Label>Theme</Label>
+          <Select
+            value={settings?.theme || "light"}
+            onValueChange={(value) => updateSetting("theme", value)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="light">Light</SelectItem>
+              <SelectItem value="dark">Dark</SelectItem>
+              <SelectItem value="system">System</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      <div className="space-y-4">
+        <h3 className="font-medium">Preferences</h3>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="notifications">Enable Notifications</Label>
+          <Switch
+            id="notifications"
+            checked={settings?.notifications ?? true}
+            onCheckedChange={(checked) => updateSetting("notifications", checked)}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="auto-sync">Auto Sync</Label>
+          <Switch
+            id="auto-sync"
+            checked={settings?.autoSync ?? true}
+            onCheckedChange={(checked) => updateSetting("autoSync", checked)}
+          />
+        </div>
+      </div>
+      
+      {isAuthenticated && (
+        <div className="space-y-4 pt-4 border-t">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">{user?.name}</p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => logout()}
+            >
+              Logout
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      <div className="pt-4 border-t">
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => chrome.runtime.openOptionsPage()}
+        >
+          Advanced Settings
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ===== OPTIONS PAGE =====
+// src/options/index.tsx
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { ThemeProvider } from "~components/theme-provider"
+import { Toaster } from "~components/ui/toaster"
+import { OptionsLayout } from "./layout"
+import "~styles/globals.css"
+
+const queryClient = new QueryClient()
+
+function OptionsIndex() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system">
+        <OptionsLayout />
+        <Toaster />
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default OptionsIndex
+
+// src/options/layout.tsx
+import { useState } from "react"
+import { cn } from "~lib/utils"
+import { Button } from "~components/ui/button"
+import { ScrollArea } from "~components/ui/scroll-area"
+import { 
+  Settings, 
+  User, 
+  Shield, 
+  Database, 
+  Bell, 
+  Palette,
+  Code,
+  HelpCircle
+} from "lucide-react"
+
+const sidebarItems = [
+  { id: "general", label: "General", icon: Settings },
+  { id: "account", label: "Account", icon: User },
+  { id: "privacy", label: "Privacy", icon: Shield },
+  { id: "data", label: "Data Management", icon: Database },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "advanced", label: "Advanced", icon: Code },
+  { id: "about", label: "About", icon: HelpCircle }
+]
+
+export function OptionsLayout() {
+  const [activeSection, setActiveSection] = useState("general")
+  
+  return (
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <div className="w-64 border-r">
+        <div className="p-6">
+          <h1 className="text-2xl font-bold">Extension Settings</h1>
+        </div>
+        <ScrollArea className="h-[calc(100vh-88px)]">
+          <div className="p-4 space-y-1">
+            {sidebarItems.map((item) => (
+              <Button
+                key={item.id}
+                variant={activeSection === item.id ? "secondary" : "ghost"}
+                className={cn(
+                  "w-full justify-start",
+                  activeSection === item.id && "bg-secondary"
+                )}
+                onClick={() => setActiveSection(item.id)}
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+      
+      {/* Content */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-4xl mx-auto p-8">
+          {activeSection === "general" && <GeneralSettings />}
+          {activeSection === "account" && <AccountSettings />}
+          {activeSection === "privacy" && <PrivacySettings />}
+          {/* Add other sections */}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ===== CORE UTILITIES (ADDITIONAL) =====
+// src/core/context-menus.ts
+export function setupContextMenus() {
+  // Remove existing menus
+  chrome.contextMenus.removeAll()
+  
+  // Create context menu items
+  chrome.contextMenus.create({
+    id: "save-selection",
+    title: "Save to Extension",
+    contexts: ["selection"]
+  })
+  
+  chrome.contextMenus.create({
+    id: "separator-1",
+    type: "separator",
+    contexts: ["selection"]
+  })
+  
+  chrome.contextMenus.create({
+    id: "analyze-page",
+    title: "Analyze Page",
+    contexts: ["page"]
+  })
+  
+  chrome.contextMenus.create({
+    id: "extract-images",
+    title: "Extract All Images",
+    contexts: ["page"]
+  })
+  
+  // Handle clicks
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    switch (info.menuItemId) {
+      case "save-selection":
+        handleSaveSelection(info.selectionText, tab)
+        break
+      case "analyze-page":
+        handleAnalyzePage(tab)
+        break
+      case "extract-images":
+        handleExtractImages(tab)
+        break
+    }
+  })
+}
+
+async function handleSaveSelection(text: string, tab: chrome.tabs.Tab) {
+  // Save selected text
+  const storage = new Storage()
+  const saved = await storage.get("saved-selections") || []
+  saved.push({
+    text,
+    url: tab.url,
+    title: tab.title,
+    timestamp: Date.now()
+  })
+  await storage.set("saved-selections", saved)
+  
+  // Show notification
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("assets/icon-128.png"),
+    title: "Text Saved!",
+    message: `Saved "${text.substring(0, 50)}..." from ${tab.title}`
+  })
+}
+
+// src/core/alarms.ts
+import { Storage } from "@plasmohq/storage"
+
+export function setupAlarms() {
+  // Clear existing alarms
+  chrome.alarms.clearAll()
+  
+  // Create periodic alarms
+  chrome.alarms.create("sync-data", { periodInMinutes: 30 })
+  chrome.alarms.create("cleanup-cache", { periodInMinutes: 60 })
+  chrome.alarms.create("check-updates", { periodInMinutes: 720 }) // 12 hours
+  
+  // Handle alarms
+  chrome.alarms.onAlarm.addListener(handleAlarm)
+}
+
+async function handleAlarm(alarm: chrome.alarms.Alarm) {
+  console.log(`Alarm triggered: ${alarm.name}`)
+  
+  switch (alarm.name) {
+    case "sync-data":
+      await syncData()
+      break
+    case "cleanup-cache":
+      await cleanupCache()
+      break
+    case "check-updates":
+      await checkForUpdates()
+      break
+  }
+}
+
+async function syncData() {
+  const storage = new Storage()
+  const settings = await storage.get("settings")
+  
+  if (!settings?.autoSync) return
+  
+  // Sync logic here
+  console.log("Syncing data...")
+}
+
+// src/core/notifications.ts
+export function setupNotifications() {
+  // Request permission if needed
+  chrome.notifications.getPermissionLevel((level) => {
+    if (level !== "granted") {
+      console.log("Notification permission not granted")
+    }
+  })
+  
+  // Set up notification handlers
+  chrome.notifications.onClicked.addListener((notificationId) => {
+    console.log("Notification clicked:", notificationId)
+    
+    // Handle specific notification types
+    if (notificationId.startsWith("update-")) {
+      chrome.tabs.create({ url: "tabs/changelog.html" })
+    }
+  })
+  
+  chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+    console.log("Notification button clicked:", notificationId, buttonIndex)
+  })
+}
+
+export function showNotification(options: chrome.notifications.NotificationOptions) {
+  const id = `notification-${Date.now()}`
+  chrome.notifications.create(id, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("assets/icon-128.png"),
+    ...options
+  })
+  return id
+}
+
+// ===== CONTENT SCRIPT UTILITIES =====
+// src/contents/page-analyzer.ts
+import type { PlasmoCSConfig } from "plasmo"
+
+export const config: PlasmoCSConfig = {
+  matches: ["<all_urls>"],
+  run_at: "document_idle"
+}
+
+// Analyze page structure and content
+export function analyzePage() {
+  const analysis = {
+    title: document.title,
+    url: window.location.href,
+    meta: {} as Record<string, string>,
+    headings: [] as string[],
+    images: [] as string[],
+    links: [] as string[],
+    scripts: [] as string[],
+    performance: {} as Record<string, number>
+  }
+  
+  // Extract meta tags
+  document.querySelectorAll("meta").forEach((meta) => {
+    const name = meta.getAttribute("name") || meta.getAttribute("property")
+    const content = meta.getAttribute("content")
+    if (name && content) {
+      analysis.meta[name] = content
+    }
+  })
+  
+  // Extract headings
+  document.querySelectorAll("h1, h2, h3").forEach((heading) => {
+    analysis.headings.push(heading.textContent?.trim() || "")
+  })
+  
+  // Extract images
+  document.querySelectorAll("img").forEach((img) => {
+    if (img.src) analysis.images.push(img.src)
+  })
+  
+  // Extract links
+  document.querySelectorAll("a[href]").forEach((link) => {
+    analysis.links.push(link.getAttribute("href") || "")
+  })
+  
+  // Extract scripts
+  document.querySelectorAll("script[src]").forEach((script) => {
+    analysis.scripts.push(script.getAttribute("src") || "")
+  })
+  
+  // Performance metrics
+  if (window.performance) {
+    const perfData = window.performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming
+    analysis.performance = {
+      domContentLoaded: perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart,
+      loadComplete: perfData.loadEventEnd - perfData.loadEventStart,
+      domInteractive: perfData.domInteractive,
+      responseTime: perfData.responseEnd - perfData.requestStart
+    }
+  }
+  
+  return analysis
+}
+
+// Send analysis to background
+chrome.runtime.sendMessage({
+  action: "page-analyzed",
+  data: analyzePage()
+})
+
+// ===== DASHBOARD TAB PAGE =====
+// src/tabs/dashboard.tsx
+import { useEffect, useState } from "react"
+import { BarChart, LineChart, PieChart } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~components/ui/tabs"
+import { sendToBackground } from "@plasmohq/messaging"
+import "~styles/globals.css"
+
+function DashboardTab() {
+  const [analytics, setAnalytics] = useState<any>(null)
+  
+  useEffect(() => {
+    loadAnalytics()
+  }, [])
+  
+  const loadAnalytics = async () => {
+    const response = await sendToBackground({
+      name: "api",
+      body: {
+        endpoint: "/analytics/overview",
+        method: "GET"
+      }
+    })
+    setAnalytics(response.data)
+  }
+  
+  return (
+    <div className="min-h-screen bg-background p-8">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold mb-8">Extension Dashboard</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Actions</CardTitle>
+              <BarChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics?.totalActions || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                +20.1% from last month
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <LineChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics?.activeUsers || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                +15% from last week
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sites Analyzed</CardTitle>
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics?.sitesAnalyzed || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                +12.5% from last month
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+        
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-4">
+            {/* Add charts and graphs here */}
+          </TabsContent>
+          
+          <TabsContent value="activity" className="space-y-4">
+            {/* Add activity log here */}
+          </TabsContent>
+          
+          <TabsContent value="settings" className="space-y-4">
+            {/* Add dashboard settings here */}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
+}
+
+export default DashboardTab
+
+// ===== TESTING =====
+// src/__tests__/storage.test.ts
+import { TypedStorage } from "~core/storage"
+
+describe("TypedStorage", () => {
+  let storage: TypedStorage
+  
+  beforeEach(() => {
+    storage = new TypedStorage()
+    // Mock chrome.storage
+    global.chrome = {
+      storage: {
+        local: {
+          get: jest.fn(),
+          set: jest.fn(),
+          remove: jest.fn()
+        }
+      }
+    } as any
+  })
+  
+  test("should get value with correct type", async () => {
+    const mockUser = { id: "1", email: "test@example.com", name: "Test User" }
+    chrome.storage.local.get.mockResolvedValue({ user: mockUser })
+    
+    const user = await storage.get("user")
+    expect(user).toEqual(mockUser)
+  })
+  
+  test("should set value with correct type", async () => {
+    const settings = { theme: "dark" as const, notifications: true, autoSync: false }
+    await storage.set("settings", settings)
+    
+    expect(chrome.storage.local.set).toHaveBeenCalledWith({ settings })
+  })
+})
+
+// ===== SCRIPTS =====
+// scripts/build.js
+const { build } = require("esbuild")
+const { copy } = require("esbuild-plugin-copy")
+
+build({
+  entryPoints: ["src/background/index.ts"],
+  bundle: true,
+  outfile: "dist/background.js",
+  platform: "browser",
+  target: ["chrome90"],
+  plugins: [
+    copy({
+      assets: {
+        from: ["./public/*"],
+        to: ["./"]
+      }
+    })
+  ]
+})
+
+// scripts/generate-icons.js
+const sharp = require("sharp")
+const fs = require("fs")
+const path = require("path")
+
+const sizes = [16, 32, 48, 128]
+const inputFile = path.join(__dirname, "../assets/icon.png")
+
+sizes.forEach(size => {
+  const outputFile = path.join(__dirname, `../assets/icon-${size}.png`)
+  sharp(inputFile)
+    .resize(size, size)
+    .toFile(outputFile, (err) => {
+      if (err) console.error(`Error generating ${size}x${size} icon:`, err)
+      else console.log(`Generated ${size}x${size} icon`)
+    })
+})
+
+// ===== GITHUB ACTIONS =====
+// .github/workflows/release.yml
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build extension
+        run: npm run build
+        
+      - name: Package extension
+        run: npm run package
+        
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+          
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./chrome-extension.zip
+          asset_name: chrome-extension-${{ github.ref }}.zip
+          asset_content_type: application/zip

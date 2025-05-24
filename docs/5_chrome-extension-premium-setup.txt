@@ -1,0 +1,952 @@
+// ===== NEWTAB COMPONENTS =====
+// src/newtab/components/search-bar.tsx
+import { useState } from "react"
+import { Search, Globe, Image, Video, News } from "lucide-react"
+import { Input } from "~components/ui/input"
+import { Button } from "~components/ui/button"
+import { Tabs, TabsList, TabsTrigger } from "~components/ui/tabs"
+
+export function SearchBar() {
+  const [query, setQuery] = useState("")
+  const [searchType, setSearchType] = useState("web")
+  
+  const searchEngines = {
+    web: "https://www.google.com/search?q=",
+    images: "https://www.google.com/search?tbm=isch&q=",
+    videos: "https://www.youtube.com/results?search_query=",
+    news: "https://news.google.com/search?q="
+  }
+  
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!query.trim()) return
+    
+    const url = searchEngines[searchType as keyof typeof searchEngines] + encodeURIComponent(query)
+    window.location.href = url
+  }
+  
+  return (
+    <form onSubmit={handleSearch} className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
+        <Input
+          type="text"
+          placeholder="Search the web..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-10 pr-4 py-6 text-lg"
+          autoFocus
+        />
+      </div>
+      
+      <Tabs value={searchType} onValueChange={setSearchType}>
+        <TabsList className="grid grid-cols-4 w-full">
+          <TabsTrigger value="web" className="gap-2">
+            <Globe className="h-4 w-4" />
+            Web
+          </TabsTrigger>
+          <TabsTrigger value="images" className="gap-2">
+            <Image className="h-4 w-4" />
+            Images
+          </TabsTrigger>
+          <TabsTrigger value="videos" className="gap-2">
+            <Video className="h-4 w-4" />
+            Videos
+          </TabsTrigger>
+          <TabsTrigger value="news" className="gap-2">
+            <News className="h-4 w-4" />
+            News
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </form>
+  )
+}
+
+// src/newtab/components/quick-links.tsx
+import { useState, useEffect } from "react"
+import { Plus, X, ExternalLink } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~components/ui/dialog"
+import { useStorage } from "~hooks/useStorage"
+
+interface QuickLink {
+  id: string
+  title: string
+  url: string
+  favicon?: string
+}
+
+export function QuickLinks() {
+  const [links, setLinks] = useStorage<QuickLink[]>("quickLinks", [])
+  const [isAddingLink, setIsAddingLink] = useState(false)
+  const [newLink, setNewLink] = useState({ title: "", url: "" })
+  
+  useEffect(() => {
+    // Add default links if none exist
+    if (!links || links.length === 0) {
+      setLinks([
+        { id: "1", title: "Gmail", url: "https://gmail.com", favicon: "https://www.google.com/s2/favicons?domain=gmail.com" },
+        { id: "2", title: "GitHub", url: "https://github.com", favicon: "https://www.google.com/s2/favicons?domain=github.com" },
+        { id: "3", title: "YouTube", url: "https://youtube.com", favicon: "https://www.google.com/s2/favicons?domain=youtube.com" }
+      ])
+    }
+  }, [])
+  
+  const addLink = () => {
+    if (!newLink.title || !newLink.url) return
+    
+    const url = newLink.url.startsWith("http") ? newLink.url : `https://${newLink.url}`
+    const domain = new URL(url).hostname
+    
+    setLinks([...links, {
+      id: Date.now().toString(),
+      title: newLink.title,
+      url: url,
+      favicon: `https://www.google.com/s2/favicons?domain=${domain}`
+    }])
+    
+    setNewLink({ title: "", url: "" })
+    setIsAddingLink(false)
+  }
+  
+  const removeLink = (id: string) => {
+    setLinks(links.filter(link => link.id !== id))
+  }
+  
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Quick Links</CardTitle>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setIsAddingLink(true)}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-2">
+          {links?.map((link) => (
+            <div
+              key={link.id}
+              className="group relative flex items-center gap-2 p-2 rounded-lg hover:bg-accent cursor-pointer"
+              onClick={() => window.open(link.url, "_blank")}
+            >
+              {link.favicon && (
+                <img src={link.favicon} alt="" className="w-4 h-4" />
+              )}
+              <span className="text-sm truncate flex-1">{link.title}</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  removeLink(link.id)
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+      
+      <Dialog open={isAddingLink} onOpenChange={setIsAddingLink}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Quick Link</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Title"
+              value={newLink.title}
+              onChange={(e) => setNewLink({ ...newLink, title: e.target.value })}
+            />
+            <Input
+              placeholder="URL"
+              value={newLink.url}
+              onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
+            />
+            <Button onClick={addLink} className="w-full">
+              Add Link
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  )
+}
+
+// src/newtab/components/productivity-stats.tsx
+import { useQuery } from "@tanstack/react-query"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { Progress } from "~components/ui/progress"
+import { TrendingUp, Clock, Target, Zap } from "lucide-react"
+import { sendToBackground } from "@plasmohq/messaging"
+
+export function ProductivityStats() {
+  const { data: stats } = useQuery({
+    queryKey: ["productivity-stats"],
+    queryFn: async () => {
+      const response = await sendToBackground({
+        name: "api",
+        body: {
+          endpoint: "/stats/productivity",
+          method: "GET"
+        }
+      })
+      return response.data || {
+        tasksCompleted: 12,
+        tasksTotal: 20,
+        focusTime: 145, // minutes
+        streak: 5
+      }
+    }
+  })
+  
+  const completionRate = stats ? (stats.tasksCompleted / stats.tasksTotal) * 100 : 0
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Today's Progress</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <div className="flex justify-between text-sm mb-2">
+            <span className="flex items-center gap-1">
+              <Target className="h-4 w-4" />
+              Tasks
+            </span>
+            <span>{stats?.tasksCompleted || 0} / {stats?.tasksTotal || 0}</span>
+          </div>
+          <Progress value={completionRate} />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              <Clock className="h-4 w-4" />
+              Focus Time
+            </p>
+            <p className="text-2xl font-bold">
+              {Math.floor((stats?.focusTime || 0) / 60)}h {(stats?.focusTime || 0) % 60}m
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              <Zap className="h-4 w-4" />
+              Streak
+            </p>
+            <p className="text-2xl font-bold">{stats?.streak || 0} days</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// src/newtab/components/weather-widget.tsx
+import { useQuery } from "@tanstack/react-query"
+import { Card, CardContent } from "~components/ui/card"
+import { Cloud, CloudRain, Sun, CloudSnow } from "lucide-react"
+
+export function WeatherWidget() {
+  const { data: weather } = useQuery({
+    queryKey: ["weather"],
+    queryFn: async () => {
+      // Get user location
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject)
+      })
+      
+      // Fetch weather data (replace with your API)
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${position.coords.latitude}&lon=${position.coords.longitude}&appid=YOUR_API_KEY&units=metric`
+      )
+      return response.json()
+    },
+    staleTime: 30 * 60 * 1000, // 30 minutes
+    retry: false
+  })
+  
+  const getWeatherIcon = (condition: string) => {
+    switch (condition) {
+      case "Clear": return <Sun className="h-12 w-12" />
+      case "Clouds": return <Cloud className="h-12 w-12" />
+      case "Rain": return <CloudRain className="h-12 w-12" />
+      case "Snow": return <CloudSnow className="h-12 w-12" />
+      default: return <Cloud className="h-12 w-12" />
+    }
+  }
+  
+  if (!weather) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Weather</p>
+              <p className="text-2xl font-bold">Loading...</p>
+            </div>
+            <Cloud className="h-12 w-12 text-muted-foreground animate-pulse" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">{weather.name}</p>
+            <p className="text-3xl font-bold">{Math.round(weather.main.temp)}°C</p>
+            <p className="text-sm capitalize">{weather.weather[0].description}</p>
+          </div>
+          {getWeatherIcon(weather.weather[0].main)}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ===== AUTHENTICATION PAGES =====
+// src/tabs/auth.tsx
+import { useState } from "react"
+import { motion } from "framer-motion"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~components/ui/card"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Label } from "~components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~components/ui/tabs"
+import { Chrome, Mail } from "lucide-react"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import toast from "react-hot-toast"
+
+export default function AuthPage() {
+  const { signIn, signUp, signInWithGoogle } = useSupabaseAuth()
+  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [fullName, setFullName] = useState("")
+  
+  const handleEmailAuth = async (type: "signin" | "signup") => {
+    setIsLoading(true)
+    try {
+      if (type === "signin") {
+        await signIn(email, password)
+        toast.success("Signed in successfully!")
+      } else {
+        await signUp(email, password, fullName)
+        toast.success("Check your email to confirm your account!")
+      }
+      // Redirect to previous page or close tab
+      window.close()
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  const handleGoogleAuth = async () => {
+    setIsLoading(true)
+    try {
+      await signInWithGoogle()
+      toast.success("Signed in with Google!")
+      window.close()
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Welcome</CardTitle>
+            <CardDescription>
+              Sign in to access all premium features
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="signin" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="signin" className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signin-email">Email</Label>
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signin-password">Password</Label>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => handleEmailAuth("signin")}
+                  disabled={isLoading}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Sign In with Email
+                </Button>
+              </TabsContent>
+              
+              <TabsContent value="signup" className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-name">Full Name</Label>
+                  <Input
+                    id="signup-name"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-email">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => handleEmailAuth("signup")}
+                  disabled={isLoading}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Sign Up with Email
+                </Button>
+              </TabsContent>
+            </Tabs>
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+            
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleGoogleAuth}
+              disabled={isLoading}
+            >
+              <Chrome className="mr-2 h-4 w-4" />
+              Google
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </div>
+  )
+}
+
+// ===== WELCOME/ONBOARDING PAGE =====
+// src/tabs/welcome.tsx
+import { useState } from "react"
+import { motion } from "framer-motion"
+import { Button } from "~components/ui/button"
+import { Card, CardContent } from "~components/ui/card"
+import { CheckCircle2, ArrowRight, Sparkles, Shield, Zap, Globe } from "lucide-react"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+
+const features = [
+  {
+    icon: Sparkles,
+    title: "Smart Features",
+    description: "AI-powered tools to enhance your browsing experience"
+  },
+  {
+    icon: Shield,
+    title: "Privacy First",
+    description: "Your data is encrypted and never shared"
+  },
+  {
+    icon: Zap,
+    title: "Lightning Fast",
+    description: "Optimized for speed and performance"
+  },
+  {
+    icon: Globe,
+    title: "Works Everywhere",
+    description: "Compatible with all your favorite websites"
+  }
+]
+
+const steps = [
+  "Sign in or create an account",
+  "Grant necessary permissions",
+  "Customize your settings",
+  "Start using the extension!"
+]
+
+export default function WelcomePage() {
+  const { isAuthenticated } = useSupabaseAuth()
+  const [currentStep, setCurrentStep] = useState(0)
+  
+  const handleGetStarted = () => {
+    if (!isAuthenticated) {
+      chrome.tabs.create({ url: chrome.runtime.getURL("tabs/auth.html") })
+    } else {
+      chrome.runtime.openOptionsPage()
+    }
+  }
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10">
+      <div className="container max-w-6xl mx-auto px-4 py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-5xl font-bold mb-4">
+            Welcome to Your New Extension
+          </h1>
+          <p className="text-xl text-muted-foreground">
+            Let's get you set up in just a few steps
+          </p>
+        </motion.div>
+        
+        {/* Features Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {features.map((feature, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <feature.icon className="h-12 w-12 mx-auto mb-4 text-primary" />
+                  <h3 className="font-semibold mb-2">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground">{feature.description}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+        
+        {/* Setup Steps */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="max-w-2xl mx-auto"
+        >
+          <Card>
+            <CardContent className="p-8">
+              <h2 className="text-2xl font-semibold mb-6">Quick Setup</h2>
+              <div className="space-y-4">
+                {steps.map((step, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center gap-4 p-4 rounded-lg transition-colors ${
+                      index <= currentStep ? "bg-primary/10" : "bg-muted/50"
+                    }`}
+                  >
+                    {index < currentStep ? (
+                      <CheckCircle2 className="h-6 w-6 text-primary" />
+                    ) : index === currentStep ? (
+                      <div className="h-6 w-6 rounded-full border-2 border-primary animate-pulse" />
+                    ) : (
+                      <div className="h-6 w-6 rounded-full border-2 border-muted-foreground" />
+                    )}
+                    <span className={index <= currentStep ? "font-medium" : "text-muted-foreground"}>
+                      {step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              
+              <Button
+                size="lg"
+                className="w-full mt-8"
+                onClick={handleGetStarted}
+              >
+                Get Started
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
+// ===== SUPABASE MIGRATIONS =====
+// supabase/migrations/001_initial_schema.sql
+-- Create users table (extends auth.users)
+CREATE TABLE public.users (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  avatar_url TEXT,
+  subscription_status TEXT DEFAULT 'free' CHECK (subscription_status IN ('free', 'pro', 'premium')),
+  stripe_customer_id TEXT UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create user_data table
+CREATE TABLE public.user_data (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL,
+  content JSONB,
+  url TEXT,
+  tags TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes
+CREATE INDEX user_data_user_id_idx ON public.user_data(user_id);
+CREATE INDEX user_data_created_at_idx ON public.user_data(created_at DESC);
+CREATE INDEX user_data_tags_idx ON public.user_data USING GIN(tags);
+
+-- Row Level Security
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_data ENABLE ROW LEVEL SECURITY;
+
+-- Policies for users table
+CREATE POLICY "Users can view own profile" ON public.users
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile" ON public.users
+  FOR UPDATE USING (auth.uid() = id);
+
+-- Policies for user_data table
+CREATE POLICY "Users can view own data" ON public.user_data
+  FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "Users can insert own data" ON public.user_data
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can update own data" ON public.user_data
+  FOR UPDATE USING (user_id = auth.uid());
+
+CREATE POLICY "Users can delete own data" ON public.user_data
+  FOR DELETE USING (user_id = auth.uid());
+
+-- Functions
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.users (id, email, full_name)
+  VALUES (new.id, new.email, new.raw_user_meta_data->>'full_name');
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for new user creation
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ===== STRIPE WEBHOOK HANDLER (Backend) =====
+// api/stripe/webhook.ts (Your backend API)
+import { NextApiRequest, NextApiResponse } from "next"
+import Stripe from "stripe"
+import { createClient } from "@supabase/supabase-js"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+)
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).end()
+  }
+  
+  const sig = req.headers["stripe-signature"]!
+  let event: Stripe.Event
+  
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    )
+  } catch (err) {
+    console.error("Webhook signature verification failed")
+    return res.status(400).send(`Webhook Error: ${err.message}`)
+  }
+  
+  switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session
+      
+      // Update user subscription status
+      await supabase
+        .from("users")
+        .update({
+          subscription_status: "pro",
+          stripe_customer_id: session.customer as string
+        })
+        .eq("email", session.customer_email!)
+      
+      break
+    }
+    
+    case "customer.subscription.updated": {
+      const subscription = event.data.object as Stripe.Subscription
+      
+      // Update subscription status
+      const status = subscription.status === "active" ? "pro" : "free"
+      
+      await supabase
+        .from("users")
+        .update({ subscription_status: status })
+        .eq("stripe_customer_id", subscription.customer as string)
+      
+      break
+    }
+    
+    case "customer.subscription.deleted": {
+      const subscription = event.data.object as Stripe.Subscription
+      
+      // Cancel subscription
+      await supabase
+        .from("users")
+        .update({ subscription_status: "free" })
+        .eq("stripe_customer_id", subscription.customer as string)
+      
+      break
+    }
+  }
+  
+  res.status(200).json({ received: true })
+}
+
+// ===== POSTCSS CONFIG =====
+// postcss.config.js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {}
+  }
+}
+
+// ===== UPDATED OPTIONS PAGE =====
+// src/options/components/account-settings.tsx
+import { useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~components/ui/card"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Label } from "~components/ui/label"
+import { Avatar, AvatarFallback, AvatarImage } from "~components/ui/avatar"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import { db } from "~core/supabase"
+import toast from "react-hot-toast"
+
+export function AccountSettings() {
+  const { user, signOut } = useSupabaseAuth()
+  const [isLoading, setIsLoading] = useState(false)
+  const [profile, setProfile] = useState({
+    full_name: user?.user_metadata?.full_name || "",
+    avatar_url: user?.user_metadata?.avatar_url || ""
+  })
+  
+  const handleUpdateProfile = async () => {
+    if (!user) return
+    
+    setIsLoading(true)
+    try {
+      await db.updateUserProfile(user.id, profile)
+      toast.success("Profile updated successfully!")
+    } catch (error) {
+      toast.error("Failed to update profile")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+      chrome.tabs.create({ url: chrome.runtime.getURL("tabs/auth.html") })
+      window.close()
+    } catch (error) {
+      toast.error("Failed to sign out")
+    }
+  }
+  
+  if (!user) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account</CardTitle>
+          <CardDescription>You need to sign in to manage your account</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/auth.html") })}>
+            Sign In
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Profile Information</CardTitle>
+          <CardDescription>Update your account details</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-4">
+            <Avatar className="h-20 w-20">
+              <AvatarImage src={profile.avatar_url} />
+              <AvatarFallback>{profile.full_name?.[0] || user.email?.[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium">{profile.full_name || "No name set"}</p>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="full_name">Full Name</Label>
+            <Input
+              id="full_name"
+              value={profile.full_name}
+              onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="avatar_url">Avatar URL</Label>
+            <Input
+              id="avatar_url"
+              value={profile.avatar_url}
+              onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
+            />
+          </div>
+          
+          <Button onClick={handleUpdateProfile} disabled={isLoading}>
+            {isLoading ? "Updating..." : "Update Profile"}
+          </Button>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Actions</CardTitle>
+          <CardDescription>Manage your account</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            variant="outline"
+            onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/pricing.html") })}
+          >
+            Manage Subscription
+          </Button>
+          <Button variant="destructive" onClick={handleSignOut}>
+            Sign Out
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ===== ADDITIONAL UI COMPONENTS =====
+// src/components/ui/avatar.tsx
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
+import { cn } from "~lib/utils"
+
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+Avatar.displayName = AvatarPrimitive.Root.displayName
+
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
+
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+
+export { Avatar, AvatarImage, AvatarFallback }
