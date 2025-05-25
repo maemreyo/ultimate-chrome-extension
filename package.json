@@ -21,6 +21,7 @@
     "@radix-ui/react-dropdown-menu": "^2.0.6",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-scroll-area": "^1.2.9",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.0.3",
     "@radix-ui/react-tabs": "^1.1.12",
@@ -74,13 +75,6 @@
     },
     "chrome_url_overrides": {
       "newtab": "newtab.html"
-    },
-    "oauth2": {
-      "client_id": "$GOOGLE_OAUTH_CLIENT_ID",
-      "scopes": [
-        "https://www.googleapis.com/auth/userinfo.email",
-        "https://www.googleapis.com/auth/userinfo.profile"
-      ]
     },
     "web_accessible_resources": [
       {

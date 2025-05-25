@@ -1,28 +1,31 @@
+import { Globe, Image, Newspaper, Search, Video } from "lucide-react"
 import { useState } from "react"
-import { Search, Globe, Image, Video, News } from "lucide-react"
-import { Input } from "~components/ui/input"
+
 import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "~components/ui/tabs"
 
 export function SearchBar() {
   const [query, setQuery] = useState("")
   const [searchType, setSearchType] = useState("web")
-  
+
   const searchEngines = {
     web: "https://www.google.com/search?q=",
     images: "https://www.google.com/search?tbm=isch&q=",
     videos: "https://www.youtube.com/results?search_query=",
     news: "https://news.google.com/search?q="
   }
-  
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
-    
-    const url = searchEngines[searchType as keyof typeof searchEngines] + encodeURIComponent(query)
+
+    const url =
+      searchEngines[searchType as keyof typeof searchEngines] +
+      encodeURIComponent(query)
     window.location.href = url
   }
-  
+
   return (
     <form onSubmit={handleSearch} className="space-y-4">
       <div className="relative">
@@ -36,7 +39,7 @@ export function SearchBar() {
           autoFocus
         />
       </div>
-      
+
       <Tabs value={searchType} onValueChange={setSearchType}>
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="web" className="gap-2">
@@ -52,7 +55,7 @@ export function SearchBar() {
             Videos
           </TabsTrigger>
           <TabsTrigger value="news" className="gap-2">
-            <News className="h-4 w-4" />
+            <Newspaper className="h-4 w-4" />
             News
           </TabsTrigger>
         </TabsList>

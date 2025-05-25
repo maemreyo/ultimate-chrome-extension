@@ -1,3 +1,5 @@
+import { Storage } from "@plasmohq/storage"
+
 export function setupContextMenus() {
   // Remove existing menus
   chrome.contextMenus.removeAll()

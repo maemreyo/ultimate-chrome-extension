@@ -8,6 +8,8 @@ import { QuickActions } from "./components/quick-actions"
 import { SavedItems } from "./components/saved-items"
 import { SearchPanel } from "./components/search-panel"
 import { SubscriptionStatus } from "./components/subscription-status"
+import { BillingPanel } from "./components/billing-panel"
+import { SettingsPanel } from "./components/settings-panel"
 
 export function SidePanelApp() {
   const { user, isLoading } = useSupabaseAuth()
