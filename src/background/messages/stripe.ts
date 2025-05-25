@@ -7,7 +7,7 @@ export type StripeRequest = {
 }
 
 const handler: PlasmoMessaging.MessageHandler<StripeRequest> = async (req, res) => {
-  const { action, priceId } = req.body
+  const { action, priceId } = req.body!
   
   try {
     switch (action) {
@@ -36,7 +36,7 @@ const handler: PlasmoMessaging.MessageHandler<StripeRequest> = async (req, res) 
         res.send({ success: false, error: "Invalid action" })
     }
   } catch (error) {
-    res.send({ success: false, error: error.message })
+    res.send({ success: false, error: (error as any).message })
   }
 }
 

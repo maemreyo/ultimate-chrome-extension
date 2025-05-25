@@ -10,7 +10,7 @@ export type AuthRequest = {
 }
 
 const handler: PlasmoMessaging.MessageHandler<AuthRequest> = async (req, res) => {
-  const { action, credentials } = req.body
+  const { action, credentials } = req.body!
   
   try {
     switch (action) {
@@ -33,7 +33,7 @@ const handler: PlasmoMessaging.MessageHandler<AuthRequest> = async (req, res) =>
         res.send({ success: false, error: "Invalid action" })
     }
   } catch (error) {
-    res.send({ success: false, error: error.message })
+    res.send({ success: false, error: (error as any).message })
   }
 }
 

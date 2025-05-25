@@ -8,7 +8,7 @@ type StreamRequest = {
 const handler: PlasmoMessaging.PortHandler<StreamRequest> = async (req, res) => {
   console.log("Stream port connected:", req.body)
   
-  const { action, channel } = req.body
+  const { action, channel } = req.body!
   
   if (action === "subscribe") {
     // Start streaming data

@@ -8,7 +8,7 @@ export type ApiRequest = {
 }
 
 const handler: PlasmoMessaging.MessageHandler<ApiRequest> = async (req, res) => {
-  const { endpoint, method, data } = req.body
+  const { endpoint, method, data } = req.body!
   
   try {
     const result = await apiClient.request({
@@ -18,7 +18,7 @@ const handler: PlasmoMessaging.MessageHandler<ApiRequest> = async (req, res) => 
     })
     res.send({ success: true, data: result })
   } catch (error) {
-    res.send({ success: false, error: error.message })
+    res.send({ success: false, error: (error as any).message })
   }
 }
 

@@ -9,7 +9,7 @@ export type SupabaseRequest = {
 }
 
 const handler: PlasmoMessaging.MessageHandler<SupabaseRequest> = async (req, res) => {
-  const { action, table, data, id } = req.body
+  const { action, table, data, id } = req.body!
   
   try {
     const { data: { session } } = await supabase.auth.getSession()
