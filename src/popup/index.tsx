@@ -9,6 +9,11 @@ import "~styles/globals.css"
 const queryClient = new QueryClient()
 
 function IndexPopup() {
+  // Check if running in extension context
+  if (typeof chrome === 'undefined' || !chrome.runtime) {
+    return <div>Error: Not running in extension context</div>
+  }
+  
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">

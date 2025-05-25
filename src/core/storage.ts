@@ -13,7 +13,6 @@ export const secureStorage = new SecureStorage({
   area: "local"
 })
 
-// Typed storage keys
 export type StorageKeys = {
   user: { id: string; email: string; name: string }
   settings: {
@@ -22,6 +21,23 @@ export type StorageKeys = {
     autoSync: boolean
   }
   cache: Record<string, any>
+  quickLinks: Array<{
+    id: string
+    title: string
+    url: string
+    favicon?: string
+  }>
+  "saved-selections": Array<{
+    text: string
+    url: string
+    title: string
+    timestamp: number
+  }>
+  "open-count": number
+  checked: boolean
+  "serial-number": string
+  installed_at: string
+  auth_token: string
 }
 
 // Storage helper with types
