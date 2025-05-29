@@ -1,39 +1,116 @@
 
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# Dependencies
+node_modules/
+.pnp
 .pnp.js
 
-# testing
-/coverage
+# Build outputs
+build/
+dist/
+.plasmo/
+.next/
+out/
 
-#cache
-.turbo
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env*.local
 
-# misc
+# Development
 .DS_Store
 *.pem
-
-# debug
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# local env files
-.env*
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
 
-out/
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Extension specific
+chrome-extension.zip
+firefox-extension.zip
+edge-extension.zip
+*.crx
+*.xpi
+*.pem
+key.pem
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Backup files
+*.backup
+*.bak
+
+# Lock files (keep only the one you use)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Production secrets
+.env.production.local
+secrets/
+
+# Analytics
+.sentryclirc
+
+# Generated files
+src/generated/
+
+# Plasmo specific
+.plasmo/
+.cache/
 build/
-dist/
 
-# plasmo - https://www.plasmo.com
-.plasmo
+# Storage files
+*.sqlite
+*.sqlite3
+*.db
 
-# bpp - http://bpp.browser.market/
-keys.json
+# Archives
+*.zip
+*.tar.gz
+*.rar
 
-# typescript
-.tsbuildinfo
+# Certificates
+*.cert
+*.crt
+*.key
+
+# Misc
+.turbo/
+.vercel/
+.netlify/
