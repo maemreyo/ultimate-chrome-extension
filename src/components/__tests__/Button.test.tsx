@@ -128,7 +128,7 @@ git push origin v1.0.0
 
 ### Support
 - [Discord Community](https://discord.gg/yourcommunity)
-- [GitHub Issues](https://github.com/yourusername/ultimate-chrome-extension/issues)
+- [GitHub Issues](https://github.com/maemreyo/ultimate-chrome-extension/issues)
 - [Stack Overflow](https://stackoverflow.com/questions/tagged/chrome-extension)
 
 ### Examples

@@ -42,7 +42,7 @@ print_warning() {
 # Check prerequisites
 check_prerequisites() {
     echo -e "\n${BLUE}Checking prerequisites...${NC}\n"
-    
+
     # Check Node.js
     if ! command -v node &> /dev/null; then
         print_error "Node.js is not installed. Please install Node.js 18 or higher."
@@ -55,7 +55,7 @@ check_prerequisites() {
         fi
         print_message "Node.js $(node -v) detected"
     fi
-    
+
     # Check package manager
     if command -v pnpm &> /dev/null; then
         PACKAGE_MANAGER="pnpm"
@@ -67,7 +67,7 @@ check_prerequisites() {
         print_error "No package manager found. Please install npm or pnpm."
         exit 1
     fi
-    
+
     # Check Git
     if ! command -v git &> /dev/null; then
         print_error "Git is not installed. Please install Git."
@@ -80,48 +80,48 @@ check_prerequisites() {
 # Get project information
 get_project_info() {
     echo -e "\n${BLUE}Project Setup${NC}\n"
-    
+
     # Project name
     read -p "Enter your extension name (e.g., my-awesome-extension): " PROJECT_NAME
     if [ -z "$PROJECT_NAME" ]; then
         PROJECT_NAME="my-chrome-extension"
     fi
     PROJECT_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g')
-    
+
     # Display name
     read -p "Enter display name (e.g., My Awesome Extension): " DISPLAY_NAME
     if [ -z "$DISPLAY_NAME" ]; then
         DISPLAY_NAME="My Chrome Extension"
     fi
-    
+
     # Description
     read -p "Enter description: " DESCRIPTION
     if [ -z "$DESCRIPTION" ]; then
         DESCRIPTION="A powerful Chrome extension built with modern web technologies"
     fi
-    
+
     # Author
     read -p "Enter author name: " AUTHOR_NAME
     if [ -z "$AUTHOR_NAME" ]; then
         AUTHOR_NAME="Your Name"
     fi
-    
+
     read -p "Enter author email: " AUTHOR_EMAIL
     if [ -z "$AUTHOR_EMAIL" ]; then
         AUTHOR_EMAIL="your.email@example.com"
     fi
-    
+
     # Features selection
     echo -e "\n${BLUE}Select features to include:${NC}"
     read -p "Include Supabase authentication? (Y/n): " INCLUDE_SUPABASE
     INCLUDE_SUPABASE=${INCLUDE_SUPABASE:-Y}
-    
+
     read -p "Include Stripe payments? (Y/n): " INCLUDE_STRIPE
     INCLUDE_STRIPE=${INCLUDE_STRIPE:-Y}
-    
+
     read -p "Include analytics? (Y/n): " INCLUDE_ANALYTICS
     INCLUDE_ANALYTICS=${INCLUDE_ANALYTICS:-Y}
-    
+
     # Confirm
     echo -e "\n${BLUE}Configuration Summary:${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -133,7 +133,7 @@ get_project_info() {
     echo "Stripe: $([ "$INCLUDE_STRIPE" = "Y" ] && echo "✓" || echo "✗")"
     echo "Analytics: $([ "$INCLUDE_ANALYTICS" = "Y" ] && echo "✓" || echo "✗")"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
+
     read -p $'\nProceed with this configuration? (Y/n): ' CONFIRM
     CONFIRM=${CONFIRM:-Y}
     if [ "$CONFIRM" != "Y" ] && [ "$CONFIRM" != "y" ]; then
@@ -145,23 +145,23 @@ get_project_info() {
 # Clone template
 clone_template() {
     echo -e "\n${BLUE}Creating project...${NC}\n"
-    
+
     # Clone from template (you'll need to replace with your actual template URL)
-    TEMPLATE_URL="https://github.com/yourusername/ultimate-chrome-extension.git"
-    
+    TEMPLATE_URL="https://github.com/maemreyo/ultimate-chrome-extension.git"
+
     if [ -d "$PROJECT_NAME" ]; then
         print_error "Directory $PROJECT_NAME already exists!"
         exit 1
     fi
-    
+
     print_message "Cloning template..."
     git clone --depth 1 "$TEMPLATE_URL" "$PROJECT_NAME" || {
         print_error "Failed to clone template. Using local copy instead..."
         cp -r "$(dirname "$0")" "$PROJECT_NAME"
     }
-    
+
     cd "$PROJECT_NAME"
-    
+
     # Remove git history
     rm -rf .git
     git init
@@ -171,7 +171,7 @@ clone_template() {
 # Customize project
 customize_project() {
     echo -e "\n${BLUE}Customizing project...${NC}\n"
-    
+
     # Update package.json
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
@@ -186,7 +186,7 @@ customize_project() {
         sed -i "s/\"description\": \".*\"/\"description\": \"$DESCRIPTION\"/" package.json
         sed -i "s/\"author\": \".*\"/\"author\": \"$AUTHOR_NAME <$AUTHOR_EMAIL>\"/" package.json
     fi
-    
+
     # Remove features if not selected
     if [ "$INCLUDE_SUPABASE" != "Y" ] && [ "$INCLUDE_SUPABASE" != "y" ]; then
         print_message "Removing Supabase integration..."
@@ -202,7 +202,7 @@ customize_project() {
         fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
     fi
-    
+
     if [ "$INCLUDE_STRIPE" != "Y" ] && [ "$INCLUDE_STRIPE" != "y" ]; then
         print_message "Removing Stripe integration..."
         rm -rf src/core/stripe.ts
@@ -218,7 +218,7 @@ customize_project() {
         fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
     fi
-    
+
     # Create .env files
     print_message "Creating environment files..."
     cat > .env.example << EOF
@@ -246,33 +246,33 @@ PLASMO_PUBLIC_GA_MEASUREMENT_ID=your_ga_measurement_id
 # Sentry (Error Tracking)
 PLASMO_PUBLIC_SENTRY_DSN=your_sentry_dsn
 EOF
-    
+
     cp .env.example .env.development
     cp .env.example .env.production
-    
+
     print_message "Project customized successfully!"
 }
 
 # Install dependencies
 install_dependencies() {
     echo -e "\n${BLUE}Installing dependencies...${NC}\n"
-    
+
     if [ "$PACKAGE_MANAGER" = "pnpm" ]; then
         pnpm install
     else
         npm install
     fi
-    
+
     print_message "Dependencies installed!"
 }
 
 # Generate assets
 generate_assets() {
     echo -e "\n${BLUE}Generating assets...${NC}\n"
-    
+
     # Create assets directory
     mkdir -p assets
-    
+
     # Generate placeholder icons
     for size in 16 48 128; do
         cat > "assets/icon-${size}.png" << EOF
@@ -280,17 +280,17 @@ generate_assets() {
 # Replace with your actual icon
 EOF
     done
-    
+
     print_message "Asset placeholders created!"
 }
 
 # Setup git hooks
 setup_git_hooks() {
     echo -e "\n${BLUE}Setting up git hooks...${NC}\n"
-    
+
     npx husky install
     npx husky add .husky/pre-commit "npx lint-staged"
-    
+
     print_message "Git hooks configured!"
 }
 
@@ -299,7 +299,7 @@ print_final_instructions() {
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}✅ Extension created successfully!${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    
+
     echo -e "\n${BLUE}Next steps:${NC}\n"
     echo "1. Navigate to your project:"
     echo "   ${YELLOW}cd $PROJECT_NAME${NC}"
@@ -322,7 +322,7 @@ print_final_instructions() {
     echo "   - Click 'Load unpacked'"
     echo "   - Select ${YELLOW}build/chrome-mv3-dev${NC} folder"
     echo ""
-    echo -e "${BLUE}📚 Documentation:${NC} https://github.com/yourusername/ultimate-chrome-extension"
+    echo -e "${BLUE}📚 Documentation:${NC} https://github.com/maemreyo/ultimate-chrome-extension"
     echo -e "${BLUE}💬 Discord:${NC} https://discord.gg/yourcommunity"
     echo ""
     echo -e "${GREEN}Happy coding! 🚀${NC}"
@@ -344,4 +344,3 @@ main() {
 
 # Run main function
 main
-

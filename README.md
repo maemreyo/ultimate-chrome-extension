@@ -97,7 +97,7 @@ This template is designed for developers who want to build **professional, scala
 
 ```bash
 # Clone the template
-git clone https://github.com/yourusername/ultimate-chrome-extension.git my-extension
+git clone https://github.com/maemreyo/ultimate-chrome-extension.git my-extension
 cd my-extension
 
 # Install dependencies
@@ -250,12 +250,12 @@ import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
 
 function LoginComponent() {
   const { signIn, signInWithGoogle, user } = useSupabaseAuth()
-  
+
   // Email/Password login
   const handleLogin = async () => {
     await signIn(email, password)
   }
-  
+
   // OAuth login
   const handleGoogleLogin = async () => {
     await signInWithGoogle()
@@ -293,7 +293,7 @@ function SettingsComponent() {
     theme: "light",
     notifications: true
   })
-  
+
   // Auto-synced across devices
   const updateTheme = (theme: "light" | "dark") => {
     setSettings({ ...settings, theme })
@@ -312,7 +312,7 @@ function PricingComponent() {
     const sessionId = await stripeService.createCheckoutSession(priceId)
     await stripeService.redirectToCheckout(sessionId)
   }
-  
+
   const handleManageBilling = async () => {
     const portalUrl = await stripeService.createCustomerPortalSession()
     window.open(portalUrl)
@@ -446,11 +446,11 @@ const plans = [
    ```typescript
    function PremiumFeature() {
      const { subscription } = useAuth()
-     
+
      if (subscription?.status !== "active") {
        return <UpgradePrompt />
      }
-     
+
      return <FeatureContent />
    }
    ```
@@ -676,8 +676,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 <div align="center">
   <p>Built with ❤️ by developers, for developers</p>
   <p>
-    <a href="https://twitter.com/yourusername">Twitter</a> •
-    <a href="https://github.com/yourusername">GitHub</a> •
+    <a href="https://twitter.com/maemreyo">Twitter</a> •
+    <a href="https://github.com/maemreyo">GitHub</a> •
     <a href="https://discord.gg/yourcommunity">Discord</a>
   </p>
 </div>

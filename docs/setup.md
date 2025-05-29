@@ -21,7 +21,7 @@ This guide will walk you through setting up your new Chrome extension from the U
 
 ```bash
 # Download and run the setup script
-curl -o create-extension.sh https://raw.githubusercontent.com/yourusername/ultimate-chrome-extension/main/create-extension.sh
+curl -o create-extension.sh https://raw.githubusercontent.com/maemreyo/ultimate-chrome-extension/main/create-extension.sh
 chmod +x create-extension.sh
 ./create-extension.sh
 ```
@@ -30,7 +30,7 @@ chmod +x create-extension.sh
 
 ```bash
 # Clone the template
-git clone https://github.com/yourusername/ultimate-chrome-extension.git my-extension
+git clone https://github.com/maemreyo/ultimate-chrome-extension.git my-extension
 cd my-extension
 
 # Install dependencies
@@ -371,7 +371,7 @@ git push origin v1.0.0
 
 ### Support
 - [Discord Community](https://discord.gg/yourcommunity)
-- [GitHub Issues](https://github.com/yourusername/ultimate-chrome-extension/issues)
+- [GitHub Issues](https://github.com/maemreyo/ultimate-chrome-extension/issues)
 - [Stack Overflow](https://stackoverflow.com/questions/tagged/chrome-extension)
 
 ### Examples
