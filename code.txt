@@ -1,0 +1,1140 @@
+// src/modules/storage/components/session-viewer.tsx
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+import { Button } from '~components/ui/button'
+import { Badge } from '~components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
+import { Progress } from '~components/ui/progress'
+import {
+  Activity,
+  Clock,
+  User,
+  Monitor,
+  LogOut,
+  RefreshCw,
+  Archive
+} from 'lucide-react'
+import { useSession } from '../hooks/useSession'
+import { SessionManager, Session, SessionActivity } from '../session/session-manager'
+import { formatDistanceToNow } from 'date-fns'
+
+export function SessionViewer() {
+  const { session, isActive, startSession, endSession, trackActivity } = useSession()
+  const [sessionHistory, setSessionHistory] = useState<Session[]>([])
+  const [stats, setStats] = useState<any>(null)
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+
+  useEffect(() => {
+    loadSessionHistory()
+    loadStats()
+  }, [])
+
+  const loadSessionHistory = async () => {
+    const manager = new SessionManager()
+    const history = await manager.getSessionHistory(undefined, 10)
+    setSessionHistory(history)
+  }
+
+  const loadStats = async () => {
+    // Calculate session stats
+    const manager = new SessionManager()
+    const history = await manager.getSessionHistory(undefined, 100)
+
+    const totalDuration = history.reduce((sum, s) => {
+      const duration = new Date(s.lastActiveAt).getTime() - new Date(s.startedAt).getTime()
+      return sum + duration
+    }, 0)
+
+    const avgDuration = history.length > 0 ? totalDuration / history.length : 0
+
+    setStats({
+      totalSessions: history.length,
+      avgDuration: Math.round(avgDuration / 1000 / 60), // minutes
+      totalActivities: history.reduce((sum, s) => sum + s.activities.length, 0)
+    })
+  }
+
+  const handleStartSession = async () => {
+    await startSession(undefined, { source: 'manual' })
+    loadSessionHistory()
+  }
+
+  const handleEndSession = async () => {
+    await endSession('manual')
+    loadSessionHistory()
+  }
+
+  const formatDuration = (start: Date, end: Date) => {
+    const duration = new Date(end).getTime() - new Date(start).getTime()
+    const minutes = Math.floor(duration / 1000 / 60)
+    const hours = Math.floor(minutes / 60)
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`
+    }
+    return `${minutes}m`
+  }
+
+  const getActivityIcon = (type: SessionActivity['type']) => {
+    const icons = {
+      page_view: '👁️',
+      action: '🎯',
+      api_call: '🔌',
+      error: '⚠️'
+    }
+    return icons[type] || '📌'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Current Session */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Current Session
+            </span>
+            {isActive ? (
+              <Badge variant="default" className="bg-green-500">Active</Badge>
+            ) : (
+              <Badge variant="secondary">Inactive</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {session ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Started</p>
+                  <p className="font-medium">
+                    {formatDistanceToNow(new Date(session.startedAt), { addSuffix: true })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Duration</p>
+                  <p className="font-medium">
+                    {formatDuration(session.startedAt, session.lastActiveAt)}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Session Progress</p>
+                {session.expiresAt && (
+                  <Progress
+                    value={
+                      ((new Date().getTime() - new Date(session.startedAt).getTime()) /
+                      (new Date(session.expiresAt).getTime() - new Date(session.startedAt).getTime())) * 100
+                    }
+                    className="h-2"
+                  />
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => trackActivity('action', { type: 'manual_track' })}
+                >
+                  Track Activity
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleEndSession}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  End Session
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">No active session</p>
+              <Button onClick={handleStartSession}>
+                Start New Session
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Session Stats */}
+      {stats && (
+        <div className="grid grid-cols-3 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">{stats.totalSessions}</div>
+              <p className="text-xs text-muted-foreground">Total Sessions</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">{stats.avgDuration}m</div>
+              <p className="text-xs text-muted-foreground">Avg Duration</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold">{stats.totalActivities}</div>
+              <p className="text-xs text-muted-foreground">Total Activities</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Session History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Session History</span>
+            <Button size="sm" variant="ghost" onClick={loadSessionHistory}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="list">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="list">List View</TabsTrigger>
+              <TabsTrigger value="details">Details</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="list" className="space-y-2">
+              {sessionHistory.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer"
+                  onClick={() => setSelectedSession(s)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">
+                        {new Date(s.startedAt).toLocaleString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Duration: {formatDuration(s.startedAt, s.lastActiveAt)} •
+                        {s.activities.length} activities
+                      </p>
+                    </div>
+                  </div>
+                  {s.device && (
+                    <Badge variant="outline">
+                      <Monitor className="h-3 w-3 mr-1" />
+                      {s.device.screen}
+                    </Badge>
+                  )}
+                </div>
+              ))}
+            </TabsContent>
+
+            <TabsContent value="details">
+              {selectedSession ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-muted rounded-lg">
+                    <h4 className="font-medium mb-2">Session Info</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">ID:</span> {selectedSession.id}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Duration:</span>{' '}
+                        {formatDuration(selectedSession.startedAt, selectedSession.lastActiveAt)}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Device:</span>{' '}
+                        {selectedSession.device?.screen}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Activities:</span>{' '}
+                        {selectedSession.activities.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium mb-2">Activity Timeline</h4>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {selectedSession.activities.map((activity, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-sm">
+                          <span className="text-lg">{getActivityIcon(activity.type)}</span>
+                          <div className="flex-1">
+                            <p className="font-medium">{activity.type}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(activity.timestamp).toLocaleTimeString()}
+                            </p>
+                            {activity.details && (
+                              <pre className="text-xs mt-1 p-2 bg-muted rounded">
+                                {JSON.stringify(activity.details, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  Select a session to view details
+                </p>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// src/modules/storage/components/history-timeline.tsx
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
+import { Button } from '~components/ui/button'
+import { Input } from '~components/ui/input'
+import { Badge } from '~components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
+import { Calendar } from '~components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '~components/ui/popover'
+import {
+  History,
+  Search,
+  Filter,
+  Calendar as CalendarIcon,
+  Download,
+  Trash2,
+  TrendingUp,
+  BarChart3,
+  Clock
+} from 'lucide-react'
+import { useHistory } from '../hooks/useHistory'
+import { HistoryItem, HistoryGroup, HistoryStats } from '../history/history-manager'
+import { format, formatDistanceToNow } from 'date-fns'
+import { cn } from '~lib/utils'
+
+export function HistoryTimeline() {
+  const { items, loading, loadItems, searchHistory, getTimeline, getStats, clearHistory, exportHistory } = useHistory()
+  const [timeline, setTimeline] = useState<HistoryGroup[]>([])
+  const [stats, setStats] = useState<HistoryStats | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    to: new Date()
+  })
+  const [activeTab, setActiveTab] = useState('timeline')
+
+  useEffect(() => {
+    loadData()
+  }, [selectedTypes, dateRange])
+
+  const loadData = async () => {
+    const filters = {
+      types: selectedTypes.length > 0 ? selectedTypes : undefined,
+      dateRange: {
+        start: dateRange.from,
+        end: dateRange.to
+      }
+    }
+
+    await loadItems(filters, 100)
+    const timelineData = await getTimeline(7, filters)
+    setTimeline(timelineData)
+
+    const statsData = await getStats(30)
+    setStats(statsData)
+  }
+
+  const handleSearch = () => {
+    if (searchTerm) {
+      searchHistory(searchTerm)
+    } else {
+      loadData()
+    }
+  }
+
+  const handleExport = async () => {
+    const blob = await exportHistory({
+      types: selectedTypes.length > 0 ? selectedTypes : undefined,
+      dateRange: { start: dateRange.from, end: dateRange.to }
+    })
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `history-export-${format(new Date(), 'yyyy-MM-dd')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleClear = async () => {
+    if (confirm('Are you sure you want to clear selected history? This cannot be undone.')) {
+      await clearHistory({
+        types: selectedTypes.length > 0 ? selectedTypes : undefined,
+        dateRange: { start: dateRange.from, end: dateRange.to }
+      })
+      loadData()
+    }
+  }
+
+  const getTypeIcon = (type: HistoryItem['type']) => {
+    const icons = {
+      analysis: '🔍',
+      fact_check: '✓',
+      search: '🔎',
+      action: '⚡',
+      view: '👁️',
+      custom: '📌'
+    }
+    return icons[type] || '📄'
+  }
+
+  const getTypeColor = (type: HistoryItem['type']) => {
+    const colors = {
+      analysis: 'bg-blue-500',
+      fact_check: 'bg-green-500',
+      search: 'bg-purple-500',
+      action: 'bg-orange-500',
+      view: 'bg-gray-500',
+      custom: 'bg-pink-500'
+    }
+    return colors[type] || 'bg-gray-500'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            History Manager
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Search history..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="flex-1"
+              />
+              <Button onClick={handleSearch}>
+                <Search className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <Select
+                value={selectedTypes.join(',')}
+                onValueChange={(value) => setSelectedTypes(value ? value.split(',') : [])}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="analysis">Analysis</SelectItem>
+                  <SelectItem value="fact_check">Fact Check</SelectItem>
+                  <SelectItem value="search">Search</SelectItem>
+                  <SelectItem value="action">Action</SelectItem>
+                  <SelectItem value="view">View</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {format(dateRange.from, 'MMM d')} - {format(dateRange.to, 'MMM d')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="range"
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range: any) => {
+                      if (range?.from && range?.to) {
+                        setDateRange({ from: range.from, to: range.to })
+                      }
+                    }}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+
+              <div className="ml-auto flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleClear}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Main Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="stats">Statistics</TabsTrigger>
+          <TabsTrigger value="list">List View</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="timeline" className="space-y-4">
+          {loading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Loading timeline...</p>
+            </div>
+          ) : (
+            timeline.map((group) => (
+              <Card key={group.id}>
+                <CardHeader>
+                  <CardTitle className="text-base">{group.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
+                      >
+                        <div className="text-2xl">{getTypeIcon(item.type)}</div>
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{item.title}</p>
+                            <Badge className={cn('text-xs', getTypeColor(item.type))}>
+                              {item.type}
+                            </Badge>
+                          </div>
+                          {item.description && (
+                            <p className="text-sm text-muted-foreground">{item.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(item.timestamp), 'HH:mm')}
+                            </span>
+                            {item.metadata?.duration && (
+                              <span>Duration: {item.metadata.duration}ms</span>
+                            )}
+                            {item.metadata?.tags && (
+                              <div className="flex gap-1">
+                                {item.metadata.tags.map((tag) => (
+                                  <Badge key={tag} variant="outline" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
+        <TabsContent value="stats">
+          {stats && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold">{stats.totalItems}</div>
+                    <p className="text-xs text-muted-foreground">Total Items</p>
+                  </CardContent>
+                </Card>
+                {Object.entries(stats.itemsByType).map(([type, count]) => (
+                  <Card key={type}>
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold">{count}</div>
+                      <p className="text-xs text-muted-foreground capitalize">{type}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Activity Over Time
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {stats.itemsByDay.map((day) => (
+                      <div key={day.date} className="flex items-center gap-2">
+                        <span className="text-sm w-24">{format(new Date(day.date), 'MMM d')}</span>
+                        <div className="flex-1 bg-muted rounded-full h-6 relative">
+                          <div
+                            className="absolute inset-y-0 left-0 bg-primary rounded-full"
+                            style={{
+                              width: `${(day.count / Math.max(...stats.itemsByDay.map(d => d.count))) * 100}%`
+                            }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-xs">
+                            {day.count}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {stats.topTags.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top Tags</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {stats.topTags.map(({ tag, count }) => (
+                        <Badge key={tag} variant="secondary">
+                          {tag} ({count})
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="list">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{getTypeIcon(item.type)}</span>
+                      <div>
+                        <p className="font-medium">{item.title}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline">{item.type}</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+// src/modules/storage/components/settings-editor.tsx
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+import { Button } from '~components/ui/button'
+import { Input } from '~components/ui/input'
+import { Label } from '~components/ui/label'
+import { Switch } from '~components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
+import { Alert, AlertDescription } from '~components/ui/alert'
+import { Badge } from '~components/ui/badge'
+import { Textarea } from '~components/ui/textarea'
+import {
+  Settings,
+  Palette,
+  Bell,
+  Shield,
+  Keyboard,
+  Download,
+  Upload,
+  RotateCcw,
+  Save,
+  AlertCircle
+} from 'lucide-react'
+import { useSettings } from '../hooks/useSettings'
+import { SettingsStore, Settings as SettingsType } from '../settings/settings-store'
+
+export function SettingsEditor() {
+  const appearanceSettings = useSettings<SettingsType['appearance']>('appearance')
+  const notificationSettings = useSettings<SettingsType['notifications']>('notifications')
+  const privacySettings = useSettings<SettingsType['privacy']>('privacy')
+  const shortcutSettings = useSettings<SettingsType['shortcuts']>('shortcuts')
+
+  const [importExportText, setImportExportText] = useState('')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [changedSettings, setChangedSettings] = useState<Set<string>>(new Set())
+
+  // Subscribe to changes
+  useEffect(() => {
+    const unsubscribe = appearanceSettings.subscribe((event) => {
+      setChangedSettings(prev => new Set([...prev, event.key]))
+    })
+    return unsubscribe
+  }, [])
+
+  const handleSave = async () => {
+    setSaveStatus('saving')
+    try {
+      // Settings are auto-saved with useSettings hook
+      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate save
+      setSaveStatus('saved')
+      setChangedSettings(new Set())
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error) {
+      setSaveStatus('error')
+    }
+  }
+
+  const handleExportSettings = async () => {
+    const store = new SettingsStore()
+    const exported = await store.export()
+    setImportExportText(exported)
+  }
+
+  const handleImportSettings = async () => {
+    if (!importExportText) return
+
+    try {
+      const store = new SettingsStore()
+      await store.import(importExportText)
+      window.location.reload() // Reload to apply imported settings
+    } catch (error) {
+      alert('Invalid settings format')
+    }
+  }
+
+  const handleResetSection = async (section: string) => {
+    if (confirm(`Reset ${section} settings to defaults?`)) {
+      const store = new SettingsStore()
+      await store.reset(section)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Settings
+            </span>
+            {changedSettings.size > 0 && (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{changedSettings.size} changes</Badge>
+                <Button size="sm" onClick={handleSave} disabled={saveStatus === 'saving'}>
+                  <Save className="h-4 w-4 mr-2" />
+                  {saveStatus === 'saving' ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Configure your extension preferences
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="appearance">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="appearance">Appearance</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="privacy">Privacy</TabsTrigger>
+              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
+              <TabsTrigger value="import-export">Import/Export</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="appearance" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Palette className="h-4 w-4" />
+                  Appearance Settings
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleResetSection('appearance')}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+
+              {appearanceSettings.value && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Theme</Label>
+                    <Select
+                      value={appearanceSettings.value.theme}
+                      onValueChange={(value: any) =>
+                        appearanceSettings.update({ ...appearanceSettings.value, theme: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                        <SelectItem value="auto">Auto (Time-based)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Font Size</Label>
+                    <Select
+                      value={appearanceSettings.value.fontSize}
+                      onValueChange={(value: any) =>
+                        appearanceSettings.update({ ...appearanceSettings.value, fontSize: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="small">Small</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="large">Large</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Compact Mode</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Reduce spacing and padding
+                        </p>
+                      </div>
+                      <Switch
+                        checked={appearanceSettings.value.compactMode}
+                        onCheckedChange={(checked) =>
+                          appearanceSettings.update({ ...appearanceSettings.value, compactMode: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Animations</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Enable UI animations
+                        </p>
+                      </div>
+                      <Switch
+                        checked={appearanceSettings.value.animations}
+                        onCheckedChange={(checked) =>
+                          appearanceSettings.update({ ...appearanceSettings.value, animations: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>High Contrast</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Increase contrast for better visibility
+                        </p>
+                      </div>
+                      <Switch
+                        checked={appearanceSettings.value.highContrast}
+                        onCheckedChange={(checked) =>
+                          appearanceSettings.update({ ...appearanceSettings.value, highContrast: checked })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="notifications" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  Notification Settings
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleResetSection('notifications')}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+
+              {notificationSettings.value && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Enable Notifications</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Show notifications from the extension
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings.value.enabled}
+                      onCheckedChange={(checked) =>
+                        notificationSettings.update({ ...notificationSettings.value, enabled: checked })
+                      }
+                    />
+                  </div>
+
+                  {notificationSettings.value.enabled && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <Label>Sound</Label>
+                        <Switch
+                          checked={notificationSettings.value.sound}
+                          onCheckedChange={(checked) =>
+                            notificationSettings.update({ ...notificationSettings.value, sound: checked })
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <Label>Desktop Notifications</Label>
+                        <Switch
+                          checked={notificationSettings.value.desktop}
+                          onCheckedChange={(checked) =>
+                            notificationSettings.update({ ...notificationSettings.value, desktop: checked })
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Notification Types</Label>
+                        <div className="space-y-2 p-3 border rounded-lg">
+                          {Object.entries(notificationSettings.value.types).map(([type, enabled]) => (
+                            <div key={type} className="flex items-center justify-between">
+                              <Label className="capitalize font-normal">{type}</Label>
+                              <Switch
+                                checked={enabled}
+                                onCheckedChange={(checked) =>
+                                  notificationSettings.update({
+                                    ...notificationSettings.value,
+                                    types: {
+                                      ...notificationSettings.value.types,
+                                      [type]: checked
+                                    }
+                                  })
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="privacy" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Privacy Settings
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleResetSection('privacy')}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+
+              {privacySettings.value && (
+                <div className="space-y-4">
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      These settings control how your data is collected and used.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Usage Tracking</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Help improve the extension with anonymous usage data
+                        </p>
+                      </div>
+                      <Switch
+                        checked={privacySettings.value.trackingEnabled}
+                        onCheckedChange={(checked) =>
+                          privacySettings.update({ ...privacySettings.value, trackingEnabled: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Share Analytics</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Share crash reports and performance data
+                        </p>
+                      </div>
+                      <Switch
+                        checked={privacySettings.value.shareAnalytics}
+                        onCheckedChange={(checked) =>
+                          privacySettings.update({ ...privacySettings.value, shareAnalytics: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Storage Encryption</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Encrypt sensitive data in storage
+                        </p>
+                      </div>
+                      <Switch
+                        checked={privacySettings.value.storageEncryption}
+                        onCheckedChange={(checked) =>
+                          privacySettings.update({ ...privacySettings.value, storageEncryption: checked })
+                        }
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Clear Data on Uninstall</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Remove all data when extension is uninstalled
+                        </p>
+                      </div>
+                      <Switch
+                        checked={privacySettings.value.clearDataOnUninstall}
+                        onCheckedChange={(checked) =>
+                          privacySettings.update({ ...privacySettings.value, clearDataOnUninstall: checked })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="shortcuts" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Keyboard className="h-4 w-4" />
+                  Keyboard Shortcuts
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleResetSection('shortcuts')}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+              </div>
+
+              {shortcutSettings.value && (
+                <div className="space-y-4">
+                  {Object.entries(shortcutSettings.value).map(([action, shortcut]) => (
+                    <div key={action} className="space-y-2">
+                      <Label className="capitalize">
+                        {action.replace(/-/g, ' ')}
+                      </Label>
+                      <Input
+                        value={shortcut}
+                        onChange={(e) =>
+                          shortcutSettings.update({
+                            ...shortcutSettings.value,
+                            [action]: e.target.value
+                          })
+                        }
+                        placeholder="e.g., Ctrl+Shift+E"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="import-export" className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium mb-4">Export Settings</h3>
+                  <Button onClick={handleExportSettings}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export All Settings
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">Import Settings</h3>
+                  <Textarea
+                    placeholder="Paste exported settings JSON here..."
+                    value={importExportText}
+                    onChange={(e) => setImportExportText(e.target.value)}
+                    rows={10}
+                  />
+                  <Button
+                    onClick={handleImportSettings}
+                    disabled={!importExportText}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import Settings
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {saveStatus === 'saved' && (
+            <Alert className="mt-4">
+              <AlertDescription>Settings saved successfully!</AlertDescription>
+            </Alert>
+          )}
+
+          {saveStatus === 'error' && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>Failed to save settings. Please try again.</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// Export all components
+export { SessionViewer } from './session-viewer'
+export { HistoryTimeline } from './history-timeline'
+export { SettingsEditor } from './settings-editor'
