@@ -5,6 +5,7 @@
   "description": "The most comprehensive Chrome Extension template with modern tech stack",
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",
+  "type": "module",
   "keywords": [
     "browser-extension",
     "chrome-extension",
