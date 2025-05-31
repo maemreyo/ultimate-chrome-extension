@@ -1,7 +1,7 @@
-import { Message, MessageFilter, MessagePriority } from './types'
-import { messageBus } from './message-bus'
+import { messageBus } from "./message-bus"
+import { Message, MessagePriority } from "./types"
 
-interface Route {
+export interface Route {
   pattern: string | RegExp
   channel: string
   handler?: (message: Message) => void | Promise<void>
@@ -11,7 +11,7 @@ interface Route {
 
 export class MessageRouter {
   private routes: Route[] = []
-  private defaultChannel = 'default'
+  private defaultChannel = "default"
 
   constructor() {
     this.setupDefaultRoutes()
@@ -21,33 +21,33 @@ export class MessageRouter {
     // Background worker routes
     this.addRoute({
       pattern: /^background\./,
-      channel: 'background',
+      channel: "background",
       priority: MessagePriority.HIGH
     })
 
     // Content script routes
     this.addRoute({
       pattern: /^content\./,
-      channel: 'content'
+      channel: "content"
     })
 
     // UI routes
     this.addRoute({
       pattern: /^(popup|options|devtools)\./,
-      channel: 'ui'
+      channel: "ui"
     })
 
     // API routes
     this.addRoute({
       pattern: /^api\./,
-      channel: 'api',
+      channel: "api",
       priority: MessagePriority.HIGH
     })
 
     // System routes
     this.addRoute({
       pattern: /^system\./,
-      channel: 'system',
+      channel: "system",
       priority: MessagePriority.URGENT
     })
   }
@@ -62,14 +62,14 @@ export class MessageRouter {
   }
 
   removeRoute(pattern: string | RegExp) {
-    this.routes = this.routes.filter(route =>
-      route.pattern.toString() !== pattern.toString()
+    this.routes = this.routes.filter(
+      (route) => route.pattern.toString() !== pattern.toString()
     )
   }
 
   async route(message: Message): Promise<void> {
-    const matchingRoutes = this.routes.filter(route => {
-      if (typeof route.pattern === 'string') {
+    const matchingRoutes = this.routes.filter((route) => {
+      if (typeof route.pattern === "string") {
         return message.type.startsWith(route.pattern)
       }
       return route.pattern.test(message.type)
@@ -87,7 +87,7 @@ export class MessageRouter {
     }
 
     // Route to all matching channels
-    const routePromises = matchingRoutes.map(async route => {
+    const routePromises = matchingRoutes.map(async (route) => {
       let routedMessage = message
 
       // Transform message if needed
@@ -130,14 +130,14 @@ export class MessageRouter {
   ): Promise<void> {
     const routedMessage: Message = {
       id: message.id || Date.now().toString(),
-      channel: 'chrome-runtime',
-      type: message.type || 'unknown',
+      channel: "chrome-runtime",
+      type: message.type || "unknown",
       payload: message.payload || message,
       timestamp: Date.now(),
       metadata: {
         sender: {
-          id: sender.id || 'unknown',
-          type: sender.tab ? 'content' : 'background',
+          id: sender.id || "unknown",
+          type: sender.tab ? "content" : "background",
           tabId: sender.tab?.id,
           frameId: sender.frameId,
           url: sender.url

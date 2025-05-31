@@ -1,19 +1,20 @@
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuidv4 } from "uuid"
+import { Storage } from "@plasmohq/storage"
+import { MessageQueue } from "./message-queue"
 import {
-  Message,
-  MessageMetadata,
   Channel,
   ChannelOptions,
-  SubscriptionHandler,
-  Subscription,
+  Message,
   MessageFilter,
+  MessageMetadata,
   MessagePriority,
+  MessageResponse,
   MessageStats,
-  ChannelStats,
-  SenderInfo
-} from './types'
-import { MessageQueue } from './message-queue'
-import { Storage } from '@plasmohq/storage'
+  QueuedMessage,
+  SenderInfo,
+  Subscription,
+  SubscriptionHandler
+} from "./types"
 
 export class MessageBus {
   private channels: Map<string, Channel> = new Map()
@@ -33,13 +34,13 @@ export class MessageBus {
 
   constructor() {
     this.messageQueue = new MessageQueue()
-    this.storage = new Storage({ area: 'local' })
+    this.storage = new Storage({ area: "local" })
     this.initialize()
   }
 
   private async initialize() {
     // Load persistent channels
-    const savedChannels = await this.storage.get('message_channels')
+    const savedChannels = await this.storage.get("message_channels")
     if (savedChannels) {
       Object.entries(savedChannels).forEach(([name, options]) => {
         this.createChannel(name, options as ChannelOptions)
@@ -197,8 +198,14 @@ export class MessageBus {
 
     // Check channel restrictions
     if (channelObj.options.allowedSenders) {
-      if (!channelObj.options.allowedSenders.includes(message.metadata.sender.type)) {
-        throw new Error(`Sender type "${message.metadata.sender.type}" not allowed on channel "${channel}"`)
+      if (
+        !channelObj.options.allowedSenders.includes(
+          message.metadata.sender.type
+        )
+      ) {
+        throw new Error(
+          `Sender type "${message.metadata.sender.type}" not allowed on channel "${channel}"`
+        )
       }
     }
 
@@ -243,8 +250,8 @@ export class MessageBus {
     payload: T,
     options: Partial<MessageMetadata> = {}
   ): Promise<void> {
-    const promises = Array.from(this.channels.keys()).map(channel =>
-      this.publish(channel, type, payload, options).catch(err => {
+    const promises = Array.from(this.channels.keys()).map((channel) =>
+      this.publish(channel, type, payload, options).catch((err) => {
         console.error(`Failed to broadcast to channel ${channel}:`, err)
       })
     )
@@ -273,19 +280,16 @@ export class MessageBus {
       }, timeout)
 
       // Subscribe to response
-      this.subscribe<MessageResponse<R>>(
-        responseChannel,
-        (message) => {
-          clearTimeout(timer)
-          this.deleteChannel(responseChannel)
+      this.subscribe<MessageResponse<R>>(responseChannel, (message) => {
+        clearTimeout(timer)
+        this.deleteChannel(responseChannel)
 
-          if (message.payload.success) {
-            resolve(message.payload.data!)
-          } else {
-            reject(new Error(message.payload.error))
-          }
+        if (message.payload.success) {
+          resolve(message.payload.data!)
+        } else {
+          reject(new Error(message.payload.error))
         }
-      )
+      })
 
       // Send request
       this.publish(channel, type, payload, {
@@ -301,17 +305,12 @@ export class MessageBus {
     response: MessageResponse<T>
   ): Promise<void> {
     if (!originalMessage.metadata.replyTo) {
-      throw new Error('Original message has no replyTo channel')
+      throw new Error("Original message has no replyTo channel")
     }
 
-    await this.publish(
-      originalMessage.metadata.replyTo,
-      'response',
-      response,
-      {
-        correlationId: originalMessage.metadata.correlationId
-      }
-    )
+    await this.publish(originalMessage.metadata.replyTo, "response", response, {
+      correlationId: originalMessage.metadata.correlationId
+    })
   }
 
   // Message Delivery
@@ -321,19 +320,22 @@ export class MessageBus {
 
     const subscribers = Array.from(channel.subscribers)
     const relevantSubscriptions = Array.from(this.subscriptions.values())
-      .filter(sub => sub.channel === message.channel)
-      .filter(sub => this.matchesFilter(message, sub.filter))
+      .filter((sub) => sub.channel === message.channel)
+      .filter((sub) => this.matchesFilter(message, sub.filter))
 
-    const deliveryPromises = relevantSubscriptions.map(async sub => {
+    const deliveryPromises = relevantSubscriptions.map(async (sub) => {
       try {
         await sub.handler(message)
         this.stats.received++
       } catch (error) {
-        console.error('Message handler error:', error)
+        console.error("Message handler error:", error)
         this.stats.failed++
 
         // Add to retry queue if configured
-        if (message.metadata.retryCount !== undefined && message.metadata.retryCount > 0) {
+        if (
+          message.metadata.retryCount !== undefined &&
+          message.metadata.retryCount > 0
+        ) {
           await this.messageQueue.add({
             ...message,
             metadata: {
@@ -361,14 +363,20 @@ export class MessageBus {
     if (filter.sender) {
       const sender = message.metadata.sender
       if (filter.sender.type && sender.type !== filter.sender.type) return false
-      if (filter.sender.tabId && sender.tabId !== filter.sender.tabId) return false
-      if (filter.sender.frameId && sender.frameId !== filter.sender.frameId) return false
+      if (filter.sender.tabId && sender.tabId !== filter.sender.tabId)
+        return false
+      if (filter.sender.frameId && sender.frameId !== filter.sender.frameId)
+        return false
     }
 
     // Metadata filter
     if (filter.metadata) {
       const metadata = message.metadata
-      if (filter.metadata.priority !== undefined && metadata.priority !== filter.metadata.priority) return false
+      if (
+        filter.metadata.priority !== undefined &&
+        metadata.priority !== filter.metadata.priority
+      )
+        return false
     }
 
     // Custom filter
@@ -380,8 +388,8 @@ export class MessageBus {
   // Cross-tab Messaging
   private setupCrossTabMessaging() {
     // Use BroadcastChannel API if available
-    if ('BroadcastChannel' in window) {
-      const bc = new BroadcastChannel('extension-messages')
+    if ("BroadcastChannel" in window) {
+      const bc = new BroadcastChannel("extension-messages")
 
       bc.onmessage = (event) => {
         const message = event.data as Message
@@ -398,18 +406,18 @@ export class MessageBus {
       }
     } else {
       // Fallback to localStorage events
-      window.addEventListener('storage', (event) => {
-        if (event.key === 'extension-message') {
-          const message = JSON.parse(event.newValue || '{}') as Message
+      window.addEventListener("storage", (event) => {
+        if (event.key === "extension-message") {
+          const message = JSON.parse(event.newValue || "{}") as Message
           this.handleIncomingMessage(message)
         }
       })
 
       // Override broadcast method
       this.broadcastMessage = async (message: Message) => {
-        localStorage.setItem('extension-message', JSON.stringify(message))
+        localStorage.setItem("extension-message", JSON.stringify(message))
         // Clean up after a short delay
-        setTimeout(() => localStorage.removeItem('extension-message'), 100)
+        setTimeout(() => localStorage.removeItem("extension-message"), 100)
       }
     }
   }
@@ -424,13 +432,13 @@ export class MessageBus {
       // Convert to internal message format
       const internalMessage: Message = {
         id: message.id || uuidv4(),
-        channel: message.channel || 'runtime',
-        type: message.type || 'unknown',
+        channel: message.channel || "runtime",
+        type: message.type || "unknown",
         payload: message.payload || message,
         timestamp: Date.now(),
         metadata: {
           sender: {
-            id: sender.id || 'unknown',
+            id: sender.id || "unknown",
             type: this.detectSenderType(sender),
             tabId: sender.tab?.id,
             frameId: sender.frameId,
@@ -450,15 +458,17 @@ export class MessageBus {
     })
   }
 
-  private detectSenderType(sender: chrome.runtime.MessageSender): SenderInfo['type'] {
+  private detectSenderType(
+    sender: chrome.runtime.MessageSender
+  ): SenderInfo["type"] {
     if (sender.id === chrome.runtime.id) {
-      if (sender.tab) return 'content'
-      if (sender.url?.includes('popup.html')) return 'popup'
-      if (sender.url?.includes('options.html')) return 'options'
-      if (sender.url?.includes('devtools.html')) return 'devtools'
-      return 'background'
+      if (sender.tab) return "content"
+      if (sender.url?.includes("popup.html")) return "popup"
+      if (sender.url?.includes("options.html")) return "options"
+      if (sender.url?.includes("devtools.html")) return "devtools"
+      return "background"
     }
-    return 'tab'
+    return "tab"
   }
 
   private async handleAsyncResponse(
@@ -474,7 +484,7 @@ export class MessageBus {
       const response = await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           this.deleteChannel(responseChannel)
-          reject(new Error('Response timeout'))
+          reject(new Error("Response timeout"))
         }, 30000) // 30 second timeout
 
         this.subscribe(responseChannel, (msg) => {
@@ -509,8 +519,8 @@ export class MessageBus {
       channelStats.lastActivity = new Date()
     }
 
-    this.deliverMessage(message).catch(error => {
-      console.error('Failed to deliver message:', error)
+    this.deliverMessage(message).catch((error) => {
+      console.error("Failed to deliver message:", error)
       this.stats.failed++
     })
   }
@@ -518,30 +528,30 @@ export class MessageBus {
   // Helper Methods
   private getSenderInfo(): SenderInfo {
     // Detect current context
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
+    if (typeof chrome !== "undefined" && chrome.runtime) {
       if (chrome.devtools) {
-        return { id: 'devtools', type: 'devtools' }
+        return { id: "devtools", type: "devtools" }
       }
 
       const url = window.location.href
-      if (url.includes('popup.html')) {
-        return { id: 'popup', type: 'popup' }
+      if (url.includes("popup.html")) {
+        return { id: "popup", type: "popup" }
       }
-      if (url.includes('options.html')) {
-        return { id: 'options', type: 'options' }
+      if (url.includes("options.html")) {
+        return { id: "options", type: "options" }
       }
-      if (url.includes('chrome-extension://')) {
-        return { id: 'background', type: 'background' }
+      if (url.includes("chrome-extension://")) {
+        return { id: "background", type: "background" }
       }
 
       return {
-        id: 'content',
-        type: 'content',
+        id: "content",
+        type: "content",
         url: window.location.href
       }
     }
 
-    return { id: 'unknown', type: 'tab' }
+    return { id: "unknown", type: "tab" }
   }
 
   private addToHistory(message: Message) {
@@ -554,7 +564,7 @@ export class MessageBus {
 
     // Clean expired messages
     const now = Date.now()
-    this.messageHistory = this.messageHistory.filter(msg => {
+    this.messageHistory = this.messageHistory.filter((msg) => {
       if (msg.metadata.ttl) {
         return now - msg.timestamp < msg.metadata.ttl
       }
@@ -572,18 +582,22 @@ export class MessageBus {
 
     // Update average
     this.stats.avgProcessingTime =
-      this.processingTimes.reduce((a, b) => a + b, 0) / this.processingTimes.length
+      this.processingTimes.reduce((a, b) => a + b, 0) /
+      this.processingTimes.length
   }
 
   private async savePersistentChannels() {
     const persistent = Array.from(this.channels.entries())
       .filter(([_, channel]) => channel.options.persistent)
-      .reduce((acc, [name, channel]) => {
-        acc[name] = channel.options
-        return acc
-      }, {} as Record<string, ChannelOptions>)
+      .reduce(
+        (acc, [name, channel]) => {
+          acc[name] = channel.options
+          return acc
+        },
+        {} as Record<string, ChannelOptions>
+      )
 
-    await this.storage.set('message_channels', persistent)
+    await this.storage.set("message_channels", persistent)
   }
 
   // Public API
@@ -595,7 +609,7 @@ export class MessageBus {
     let history = this.messageHistory
 
     if (channel) {
-      history = history.filter(msg => msg.channel === channel)
+      history = history.filter((msg) => msg.channel === channel)
     }
 
     return history.slice(-limit)
@@ -603,7 +617,9 @@ export class MessageBus {
 
   clearHistory(channel?: string) {
     if (channel) {
-      this.messageHistory = this.messageHistory.filter(msg => msg.channel !== channel)
+      this.messageHistory = this.messageHistory.filter(
+        (msg) => msg.channel !== channel
+      )
     } else {
       this.messageHistory = []
     }
