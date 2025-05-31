@@ -1,7 +1,7 @@
-import { AdvancedStorage } from './advanced-storage'
-import type { StorageConfig } from './types'
+import { AdvancedStorage } from "./advanced-storage"
+import type { StorageConfig } from "./types"
 
-class StorageManager {
+export class StorageManager {
   private instances: Map<string, AdvancedStorage> = new Map()
   private defaultInstance: AdvancedStorage | null = null
 
@@ -39,7 +39,7 @@ class StorageManager {
   destroy(name?: string) {
     if (!name) {
       // Destroy all instances
-      this.instances.forEach(instance => instance.destroy())
+      this.instances.forEach((instance) => instance.destroy())
       this.instances.clear()
 
       if (this.defaultInstance) {

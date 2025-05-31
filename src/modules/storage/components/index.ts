@@ -1,2 +1,5 @@
-export { StorageManagerUI } from './storage-manager'
-export { StorageExplorer } from './storage-explorer'
+export { HistoryTimeline } from "./history-timeline"
+export { SessionViewer } from "./session-viewer"
+export { SettingsEditor } from "./settings-editor"
+export { StorageExplorer } from "./storage-explorer"
+export { StorageManagerUI } from "./storage-manager"

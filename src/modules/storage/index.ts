@@ -1,7 +1,9 @@
-export * from './advanced-storage'
-export * from './components'
-export * from './history/history-manager'
-export * from './hooks'
-export { storageManager } from './storage-manager'
-export * from './storage-provider'
-export * from './types'
+export * from "./advanced-storage"
+export * from "./components"
+export * from "./history/history-manager"
+export * from "./hooks"
+export * from "./session/session-manager"
+export * from "./settings/settings-store"
+export { StorageManager, storageManager } from "./storage-manager"
+export * from "./storage-provider"
+export * from "./types"

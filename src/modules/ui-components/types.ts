@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode } from "react"
 
 export interface Position {
   x: number
@@ -19,9 +19,9 @@ export interface FloatingIconConfig {
   tooltip?: string
   onClick?: () => void
   onHover?: () => void
-  position?: 'left' | 'right'
+  position?: "left" | "right"
   offset?: number
-  showOn?: 'hover' | 'always' | 'selection'
+  showOn?: "hover" | "always" | "selection"
   className?: string
   delay?: number
 }
@@ -39,7 +39,7 @@ export interface ContextMenuItem {
 }
 
 export interface SidebarConfig {
-  position?: 'left' | 'right'
+  position?: "left" | "right"
   width?: number | string
   minWidth?: number
   maxWidth?: number
@@ -56,7 +56,7 @@ export interface NotificationConfig {
   id?: string
   title?: string
   message: string
-  type?: 'info' | 'success' | 'warning' | 'error'
+  type?: "info" | "success" | "warning" | "error"
   duration?: number
   closable?: boolean
   action?: {
@@ -64,5 +64,17 @@ export interface NotificationConfig {
     onClick: () => void
   }
   icon?: ReactNode
-  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center'
+  position?:
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right"
+    | "top-center"
+    | "bottom-center"
 }
+
+// Re-export from mini-menu.tsx
+export { MiniMenuItem } from "./mini-menu"
+
+// Re-export from loading-states.tsx
+export { LoadingProps } from "./loading-states"
