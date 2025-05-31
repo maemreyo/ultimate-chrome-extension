@@ -313,7 +313,7 @@ export class ResultFormatter {
 }
 
 // Types for formatter
-interface FormatterOptions {
+export interface FormatterOptions {
   includeMetadata?: boolean
   includeRecommendations?: boolean
   includeSources?: boolean
@@ -321,7 +321,7 @@ interface FormatterOptions {
   theme?: 'light' | 'dark'
 }
 
-interface FormattedResult {
+export interface FormattedResult {
   id: string
   type: string
   status: string
@@ -334,21 +334,21 @@ interface FormattedResult {
   theme: string
 }
 
-interface FormattedSection extends AnalysisSection {
+export interface FormattedSection extends AnalysisSection {
   formatted: string | React.ReactNode
 }
 
-interface FormattedMetrics {
+export interface FormattedMetrics {
   primary: any[]
   secondary: any[]
 }
 
-interface FormattedRecommendation extends Recommendation {
+export interface FormattedRecommendation extends Recommendation {
   icon: string
   color: string
 }
 
-interface FormattedMetadata {
+export interface FormattedMetadata {
   duration?: string
   tokensUsed?: string
   model?: string
