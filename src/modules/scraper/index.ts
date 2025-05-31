@@ -1,7 +1,7 @@
-export * from './types'
-export * from './content-extractor'
-export * from './article-reader'
-export * from './scraper'
-export * from './hooks'
-export * from './components'
-export { scraperService } from './scraper-service'
+export { ArticleReader } from "./article-reader"
+export * from "./components"
+export { ContentExtractor } from "./content-extractor"
+export * from "./hooks"
+export { WebScraper } from "./scraper"
+export { scraperService } from "./scraper-service"
+export * from "./types"
