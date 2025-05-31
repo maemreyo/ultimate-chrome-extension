@@ -1,7 +1,9 @@
-import { SiteAdapter } from '../types'
-import { MediumAdapter } from './medium'
-import { SubstackAdapter } from './substack'
-import { GenericNewsAdapter } from './news-sites'
+import { SiteAdapter } from "../types"
+import { MediumAdapter } from "./medium"
+import { GenericNewsAdapter } from "./news-sites"
+import { SubstackAdapter } from "./substack"
+
+export { GenericNewsAdapter, MediumAdapter, SubstackAdapter }
 
 const adapters: SiteAdapter[] = [
   new MediumAdapter(),
@@ -11,7 +13,7 @@ const adapters: SiteAdapter[] = [
 
 export function getSiteAdapter(url: string): SiteAdapter | null {
   for (const adapter of adapters) {
-    if (adapter.patterns.some(pattern => pattern.test(url))) {
+    if (adapter.patterns.some((pattern) => pattern.test(url))) {
       return adapter
     }
   }

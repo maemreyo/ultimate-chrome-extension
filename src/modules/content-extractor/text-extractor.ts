@@ -1,7 +1,13 @@
-import { ExtractedContent, ExtractionOptions, Paragraph } from './types'
-import { ParagraphDetector } from './paragraph-detector'
-import { ContentCleaner } from './content-cleaner'
-import { getSiteAdapter } from './site-adapters'
+import { ContentCleaner } from "./content-cleaner"
+import { ParagraphDetector } from "./paragraph-detector"
+import { getSiteAdapter } from "./site-adapters"
+import {
+  ContentMetadata,
+  ExtractedContent,
+  ExtractionOptions,
+  Paragraph,
+  Section
+} from "./types"
 
 export class TextExtractor {
   private paragraphDetector: ParagraphDetector
@@ -12,7 +18,11 @@ export class TextExtractor {
     this.contentCleaner = new ContentCleaner()
   }
 
-  extract(doc: Document, url: string, options: ExtractionOptions = {}): ExtractedContent {
+  extract(
+    doc: Document,
+    url: string,
+    options: ExtractionOptions = {}
+  ): ExtractedContent {
     // Try site-specific adapter first
     const adapter = getSiteAdapter(url)
     if (adapter && (!options.adapter || options.adapter === adapter.name)) {
@@ -23,12 +33,17 @@ export class TextExtractor {
     }
 
     // Fallback to generic extraction
-    const cleanedDoc = this.contentCleaner.clean(doc.cloneNode(true) as Document, options.cleaningOptions)
+    const cleanedDoc = this.contentCleaner.clean(
+      doc.cloneNode(true) as Document,
+      options.cleaningOptions
+    )
     const paragraphs = this.paragraphDetector.detect(cleanedDoc, options)
-    const sections = options.detectSections ? this.detectSections(paragraphs) : []
+    const sections = options.detectSections
+      ? this.detectSections(paragraphs)
+      : []
 
-    const cleanText = paragraphs.map(p => p.text).join('\n\n')
-    const wordCount = cleanText.split(/\s+/).filter(w => w.length > 0).length
+    const cleanText = paragraphs.map((p) => p.text).join("\n\n")
+    const wordCount = cleanText.split(/\s+/).filter((w) => w.length > 0).length
     const readingTime = Math.ceil(wordCount / 200) // 200 words per minute
 
     return {
@@ -38,17 +53,20 @@ export class TextExtractor {
       sections,
       readingTime,
       wordCount,
-      language: doc.documentElement.lang || 'en',
-      metadata: options.includeMetadata ? this.extractMetadata(doc, url) : this.getBasicMetadata(url)
+      language: doc.documentElement.lang || "en",
+      metadata: options.includeMetadata
+        ? this.extractMetadata(doc, url)
+        : this.getBasicMetadata(url)
     }
   }
 
   private extractTitle(doc: Document): string {
     // Try multiple strategies
     const strategies = [
-      () => doc.querySelector('h1')?.textContent,
+      () => doc.querySelector("h1")?.textContent,
       () => doc.querySelector('[class*="title"]')?.textContent,
-      () => doc.querySelector('meta[property="og:title"]')?.getAttribute('content'),
+      () =>
+        doc.querySelector('meta[property="og:title"]')?.getAttribute("content"),
       () => doc.title.split(/[|\-–]/)[0],
       () => doc.title
     ]
@@ -75,34 +93,36 @@ export class TextExtractor {
       'meta[name="author"]',
       'meta[property="article:author"]',
       '[rel="author"]',
-      '.author-name',
-      '.by-line',
-      '.byline',
+      ".author-name",
+      ".by-line",
+      ".byline",
       '[itemprop="author"]'
     ]
 
     for (const selector of authorSelectors) {
       const element = doc.querySelector(selector)
       if (element) {
-        metadata.author = element.getAttribute('content') || element.textContent?.trim()
+        metadata.author =
+          element.getAttribute("content") || element.textContent?.trim()
         if (metadata.author) break
       }
     }
 
     // Dates
     const dateSelectors = [
-      { selector: 'meta[property="article:published_time"]', attr: 'content' },
-      { selector: 'time[datetime]', attr: 'datetime' },
-      { selector: '.publish-date', attr: 'textContent' },
-      { selector: '[itemprop="datePublished"]', attr: 'content' }
+      { selector: 'meta[property="article:published_time"]', attr: "content" },
+      { selector: "time[datetime]", attr: "datetime" },
+      { selector: ".publish-date", attr: "textContent" },
+      { selector: '[itemprop="datePublished"]', attr: "content" }
     ]
 
     for (const { selector, attr } of dateSelectors) {
       const element = doc.querySelector(selector)
       if (element) {
-        const dateStr = attr === 'textContent'
-          ? element.textContent
-          : element.getAttribute(attr)
+        const dateStr =
+          attr === "textContent"
+            ? element.textContent
+            : element.getAttribute(attr)
 
         if (dateStr) {
           const date = new Date(dateStr)
@@ -115,26 +135,35 @@ export class TextExtractor {
     }
 
     // Tags/Keywords
-    const keywords = doc.querySelector('meta[name="keywords"]')?.getAttribute('content')
+    const keywords = doc
+      .querySelector('meta[name="keywords"]')
+      ?.getAttribute("content")
     if (keywords) {
-      metadata.tags = keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+      metadata.tags = keywords
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0)
     }
 
     // Category
-    const category = doc.querySelector('meta[property="article:section"]')?.getAttribute('content')
+    const category = doc
+      .querySelector('meta[property="article:section"]')
+      ?.getAttribute("content")
     if (category) {
       metadata.category = category
     }
 
     // Description
     metadata.description =
-      doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-      doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
+      doc.querySelector('meta[name="description"]')?.getAttribute("content") ||
+      doc
+        .querySelector('meta[property="og:description"]')
+        ?.getAttribute("content")
 
     // Image
     metadata.imageUrl =
-      doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
-      doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content')
+      doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
+      doc.querySelector('meta[name="twitter:image"]')?.getAttribute("content")
 
     return metadata
   }
@@ -187,16 +216,17 @@ export class TextExtractor {
     url: string,
     options: ExtractionOptions
   ): ExtractedContent {
-    const wordCount = partial.cleanText?.split(/\s+/).filter(w => w.length > 0).length || 0
+    const wordCount =
+      partial.cleanText?.split(/\s+/).filter((w) => w.length > 0).length || 0
 
     return {
       title: partial.title || this.extractTitle(doc),
       paragraphs: partial.paragraphs || [],
-      cleanText: partial.cleanText || '',
+      cleanText: partial.cleanText || "",
       sections: partial.sections || [],
       readingTime: partial.readingTime || Math.ceil(wordCount / 200),
       wordCount: partial.wordCount || wordCount,
-      language: partial.language || doc.documentElement.lang || 'en',
+      language: partial.language || doc.documentElement.lang || "en",
       metadata: partial.metadata || this.extractMetadata(doc, url)
     }
   }
