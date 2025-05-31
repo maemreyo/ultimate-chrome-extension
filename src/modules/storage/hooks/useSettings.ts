@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { SettingsStore, Settings, SettingsChangeEvent } from '../settings/settings-store'
+import { useCallback, useEffect, useState } from 'react'
+import { SettingsStore, type SettingsChangeEvent } from '../settings/settings-store'
 
 let settingsStore: SettingsStore | null = null
 
@@ -53,8 +53,3 @@ export function useSettings<T = any>(key?: string) {
       settingsStore!.subscribe(key || '*', callback)
   }
 }
-
-// Export all sub-modules
-export * from './session/session-manager'
-export * from './history/history-manager'
-export * from './settings/settings-store'

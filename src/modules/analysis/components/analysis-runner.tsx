@@ -1,17 +1,15 @@
+import { AlertCircle, Loader2, Play } from 'lucide-react'
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+import { Alert, AlertDescription } from '~components/ui/alert'
+import { Badge } from '~components/ui/badge'
 import { Button } from '~components/ui/button'
-import { Textarea } from '~components/ui/textarea'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
 import { Input } from '~components/ui/input'
 import { Label } from '~components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
-import { Alert, AlertDescription } from '~components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Badge } from '~components/ui/badge'
-import { Loader2, Play, FileText, BarChart, AlertCircle } from 'lucide-react'
-import { useAnalysis } from '../hooks/useAnalysis'
+import { Textarea } from '~components/ui/textarea'
 import { useAnalysisContext } from '../analysis-provider'
-import { AnalysisType } from '../types'
+import { useAnalysis } from '../hooks/useAnalysis'
 
 export function AnalysisRunner() {
   const { availableTypes } = useAnalysisContext()

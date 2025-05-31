@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { storageManager } from './storage-manager'
-import { StorageConfig, StorageStats } from './types'
 import { AdvancedStorage } from './advanced-storage'
+import { storageManager } from './storage-manager'
+import type { StorageConfig, StorageStats } from './types'
 
 interface StorageContextValue {
   storage: AdvancedStorage

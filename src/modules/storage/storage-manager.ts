@@ -1,5 +1,5 @@
 import { AdvancedStorage } from './advanced-storage'
-import { StorageConfig } from './types'
+import type { StorageConfig } from './types'
 
 class StorageManager {
   private instances: Map<string, AdvancedStorage> = new Map()

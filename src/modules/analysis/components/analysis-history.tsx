@@ -1,6 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
+import { Clock, Eye, Search, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Badge } from '~components/ui/badge'
+import { Button } from '~components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
 import { Input } from '~components/ui/input'
 import {
   Table,
@@ -10,10 +12,8 @@ import {
   TableHeader,
   TableRow
 } from '~components/ui/table'
-import { Search, Trash2, Eye, Clock } from 'lucide-react'
 import { useAnalysisContext } from '../analysis-provider'
-import { useState } from 'react'
-import { AnalysisResult } from '../types'
+import type { AnalysisResult } from '../types'
 
 export function AnalysisHistory() {
   const { history, clearHistory } = useAnalysisContext()

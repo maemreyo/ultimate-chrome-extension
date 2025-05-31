@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { analysisEngine } from './analysis-engine'
-import { AnalysisType, AnalysisResult } from './types'
+import type { AnalysisResult, AnalysisType } from './types'
 
 interface AnalysisContextValue {
   availableTypes: AnalysisType[]

@@ -1,21 +1,19 @@
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Badge } from '~components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Progress } from '~components/ui/progress'
+import { formatDistanceToNow } from 'date-fns'
 import {
   Activity,
   Clock,
-  User,
-  Monitor,
   LogOut,
-  RefreshCw,
-  Archive
+  Monitor,
+  RefreshCw
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Badge } from '~components/ui/badge'
+import { Button } from '~components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
+import { Progress } from '~components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
 import { useSession } from '../hooks/useSession'
-import { SessionManager, Session, SessionActivity } from '../session/session-manager'
-import { formatDistanceToNow } from 'date-fns'
+import { SessionManager, type Session, type SessionActivity } from '../session/session-manager'
 
 export function SessionViewer() {
   const { session, isActive, startSession, endSession, trackActivity } = useSession()

@@ -1,12 +1,12 @@
 import { useState } from "react"
+import { Alert, AlertDescription } from "~components/ui/alert"
+import { Button } from "~components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~components/ui/select"
 import { Input } from "~components/ui/input"
 import { Label } from "~components/ui/label"
-import { Button } from "~components/ui/button"
-import { Alert, AlertDescription } from "~components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~components/ui/select"
 import { useAIContext } from "../ai-provider"
-import { AIConfig } from "../types"
+import type { AIConfig } from "../types"
 
 export function AISettings() {
   const { config, stats, configure, resetStats } = useAIContext()

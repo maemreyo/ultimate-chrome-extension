@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { storageManager } from '../storage-manager'
-import { QueryOptions } from '../types'
+import type { QueryOptions } from '../types'
 
 export function useAdvancedStorage<T = any>(key?: string, initialValue?: T) {
   const [value, setValue] = useState<T | null>(initialValue || null)

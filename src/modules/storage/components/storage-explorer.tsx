@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Search,
+  Trash2
+} from 'lucide-react'
+import { useState } from 'react'
+import { Badge } from '~components/ui/badge'
+import { Button } from '~components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
 import { Input } from '~components/ui/input'
-import { Button } from '~components/ui/button'
-import { Badge } from '~components/ui/badge'
 import {
   Table,
   TableBody,
@@ -11,18 +18,9 @@ import {
   TableHeader,
   TableRow
 } from '~components/ui/table'
-import {
-  Search,
-  Eye,
-  Edit,
-  Trash2,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-  Filter
-} from 'lucide-react'
 import { useStorageQuery } from '../hooks/useAdvancedStorage'
-import { StorageItem } from '../types'
+import { storageManager } from '../storage-manager'
+import type { StorageItem } from '../types'
 
 export function StorageExplorer() {
   const [searchTerm, setSearchTerm] = useState('')

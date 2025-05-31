@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { ContextMenuItem, Position } from './types'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '~lib/utils'
+import type { ContextMenuItem, Position } from './types'
 
 interface ContextMenuProps {
   items: ContextMenuItem[]

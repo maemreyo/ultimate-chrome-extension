@@ -1,4 +1,4 @@
-import { AIProvider, GenerateOptions, Classification, SummarizeOptions, AIConfig } from "../types"
+import type { AIConfig, AIProvider, Classification, GenerateOptions, SummarizeOptions } from "../types"
 
 export class AnthropicProvider implements AIProvider {
   name = "anthropic"

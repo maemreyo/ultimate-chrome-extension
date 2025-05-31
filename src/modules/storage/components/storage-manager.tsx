@@ -1,27 +1,26 @@
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Progress } from '~components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Alert, AlertDescription } from '~components/ui/alert'
-import { Badge } from '~components/ui/badge'
-import { Switch } from '~components/ui/switch'
-import { Label } from '~components/ui/label'
 import {
+  Archive,
   Download,
-  Upload,
-  Trash2,
-  RefreshCw,
+  FileDown,
+  FileUp,
   HardDrive,
   Lock,
+  RefreshCw,
+  Trash2,
   Unlock,
-  Archive,
-  FileDown,
-  FileUp
+  Upload
 } from 'lucide-react'
-import { useStorageContext } from '../storage-provider'
+import { useState } from 'react'
+import { Alert, AlertDescription } from '~components/ui/alert'
+import { Button } from '~components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+import { Label } from '~components/ui/label'
+import { Progress } from '~components/ui/progress'
+import { Switch } from '~components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
 import { useStorageStats } from '../hooks/useStorageStats'
-import { ImportExportOptions } from '../types'
+import { useStorageContext } from '../storage-provider'
+import type { ImportExportOptions } from '../types'
 
 export function StorageManagerUI() {
   const { storage, config, updateConfig } = useStorageContext()

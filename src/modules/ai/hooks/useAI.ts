@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react"
+import { useCallback, useState } from "react"
 import { aiService } from "../ai-service"
-import { GenerateOptions, Classification, SummarizeOptions } from "../types"
+import type { GenerateOptions, SummarizeOptions } from "../types"
 
 export function useAI() {
   const [loading, setLoading] = useState(false)

@@ -1,9 +1,9 @@
 import { Storage } from "@plasmohq/storage"
-import { AIProvider, AIConfig, AIUsageStats } from "./types"
-import { OpenAIProvider } from "./providers/openai"
 import { AnthropicProvider } from "./providers/anthropic"
 import { HuggingFaceProvider } from "./providers/huggingface"
 import { LocalProvider } from "./providers/local"
+import { OpenAIProvider } from "./providers/openai"
+import type { AIConfig, AIProvider, AIUsageStats } from "./types"
 
 export class AIService {
   private provider: AIProvider | null = null

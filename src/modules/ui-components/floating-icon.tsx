@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { FloatingIconConfig, Position } from './types'
 import { cn } from '~lib/utils'
+import type { FloatingIconConfig, Position } from './types'
 
 interface FloatingIconProps extends FloatingIconConfig {
   targetElement: HTMLElement | null

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
-import { AIConfig, AIUsageStats } from "./types"
 import { aiService } from "./ai-service"
+import type { AIConfig, AIUsageStats } from "./types"
 
 interface AIContextValue {
   config: AIConfig | null

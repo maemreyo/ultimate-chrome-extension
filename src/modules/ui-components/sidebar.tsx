@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence, PanInfo } from 'framer-motion'
-import { X, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
-import { SidebarConfig } from './types'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ChevronLeft, ChevronRight, GripVertical, X } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
 import { cn } from '~lib/utils'
+import type { SidebarConfig } from './types'
 
 interface SidebarProps extends SidebarConfig {
   isOpen: boolean

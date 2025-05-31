@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { storageManager } from '../storage-manager'
-import { StorageStats } from '../types'
+import type { StorageStats } from '../types'
 
 export function useStorageStats(refreshInterval?: number) {
   const [stats, setStats] = useState<StorageStats | null>(null)

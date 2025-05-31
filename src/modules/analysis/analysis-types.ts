@@ -1,4 +1,4 @@
-import { AnalysisType } from './types'
+import type { AnalysisType } from './types'
 
 export const analysisTypes: Record<string, AnalysisType> = {
   content: {

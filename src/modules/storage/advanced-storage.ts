@@ -1,13 +1,13 @@
-import Dexie, { Table } from 'dexie'
-import CryptoJS from 'crypto-js'
-import pako from 'pako'
 import { Storage } from '@plasmohq/storage'
-import {
-  StorageConfig,
-  StorageItem,
-  QueryOptions,
+import CryptoJS from 'crypto-js'
+import Dexie from 'dexie'
+import pako from 'pako'
+import type {
   BulkOperation,
   ImportExportOptions,
+  QueryOptions,
+  StorageConfig,
+  StorageItem,
   StorageStats
 } from './types'
 
@@ -135,7 +135,7 @@ export class AdvancedStorage {
     const item: StorageItem<T> = {
       id: `${key}_${Date.now()}`,
       key,
-      value: processedValue as T,
+      value: processedValue,
       metadata: {
         created: now,
         updated: now,

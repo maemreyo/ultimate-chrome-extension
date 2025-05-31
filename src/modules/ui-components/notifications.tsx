@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { AlertTriangle, CheckCircle, Info, X, XCircle } from 'lucide-react'
+import React, { createContext, useCallback, useContext, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { X, Info, CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
-import { NotificationConfig } from './types'
 import { cn } from '~lib/utils'
+import type { NotificationConfig } from './types'
 
 interface NotificationContextValue {
   notify: (config: NotificationConfig) => void

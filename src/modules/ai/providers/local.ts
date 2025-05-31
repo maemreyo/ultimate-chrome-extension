@@ -1,5 +1,5 @@
 import * as tf from "@tensorflow/tfjs"
-import { AIProvider, GenerateOptions, Classification, SummarizeOptions, AIConfig } from "../types"
+import type { AIConfig, AIProvider, Classification, GenerateOptions, SummarizeOptions } from "../types"
 
 export class LocalProvider implements AIProvider {
   name = "local"

@@ -1,4 +1,4 @@
-import { AIProvider, GenerateOptions, Classification, SummarizeOptions, AIConfig } from "../types"
+import type { AIConfig, AIProvider, Classification, GenerateOptions, SummarizeOptions } from "../types"
 
 export class OpenAIProvider implements AIProvider {
   name = "openai"

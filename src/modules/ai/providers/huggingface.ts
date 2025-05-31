@@ -1,5 +1,5 @@
 import { HfInference } from "@huggingface/inference"
-import { AIProvider, GenerateOptions, Classification, SummarizeOptions, AIConfig } from "../types"
+import type { AIConfig, AIProvider, Classification, GenerateOptions, SummarizeOptions } from "../types"
 
 export class HuggingFaceProvider implements AIProvider {
   name = "huggingface"
