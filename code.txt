@@ -1,2352 +1,1146 @@
-// src/modules/analysis/index.ts
-export * from './types'
-export * from './analysis-engine'
-export * from './analysis-provider'
+// src/modules/ui-components/index.ts
+export * from './floating-icon'
+export * from './context-menu'
+export * from './sidebar'
+export * from './mini-menu'
+export * from './loading-states'
+export * from './notifications'
 export * from './hooks'
-export * from './components'
-export { analysisEngine } from './analysis-engine'
+export * from './providers'
+export * from './types'
 
-// src/modules/analysis/types.ts
-export interface AnalysisType {
+// src/modules/ui-components/types.ts
+import { ReactNode } from 'react'
+
+export interface Position {
+  x: number
+  y: number
+}
+
+export interface Rect {
+  top: number
+  left: number
+  width: number
+  height: number
+  right: number
+  bottom: number
+}
+
+export interface FloatingIconConfig {
+  icon: ReactNode
+  tooltip?: string
+  onClick?: () => void
+  onHover?: () => void
+  position?: 'left' | 'right'
+  offset?: number
+  showOn?: 'hover' | 'always' | 'selection'
+  className?: string
+  delay?: number
+}
+
+export interface ContextMenuItem {
   id: string
-  name: string
-  description: string
-  icon?: string
-  category: 'content' | 'sentiment' | 'seo' | 'readability' | 'fact-check' | 'bias' | 'custom'
-  requiredInputs: AnalysisInput[]
-  outputFormat: AnalysisOutput
-  estimatedTime?: number // in seconds
-  aiRequired: boolean
+  label: string
+  icon?: ReactNode
+  shortcut?: string
+  disabled?: boolean
+  danger?: boolean
+  separator?: boolean
+  onClick?: () => void
+  children?: ContextMenuItem[]
 }
 
-export interface AnalysisInput {
-  name: string
-  type: 'text' | 'url' | 'html' | 'image' | 'document'
-  required: boolean
-  maxLength?: number
-  description?: string
+export interface SidebarConfig {
+  position?: 'left' | 'right'
+  width?: number | string
+  minWidth?: number
+  maxWidth?: number
+  resizable?: boolean
+  collapsible?: boolean
+  defaultCollapsed?: boolean
+  overlay?: boolean
+  pushContent?: boolean
+  className?: string
+  zIndex?: number
 }
 
-export interface AnalysisOutput {
-  type: 'structured' | 'markdown' | 'html' | 'json'
-  schema?: Record<string, any>
-  sections?: string[]
+export interface NotificationConfig {
+  id?: string
+  title?: string
+  message: string
+  type?: 'info' | 'success' | 'warning' | 'error'
+  duration?: number
+  closable?: boolean
+  action?: {
+    label: string
+    onClick: () => void
+  }
+  icon?: ReactNode
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center'
 }
 
-export interface AnalysisRequest {
-  type: string
-  inputs: Record<string, any>
-  options?: AnalysisOptions
+// src/modules/ui-components/floating-icon.tsx
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FloatingIconConfig, Position } from './types'
+import { cn } from '~lib/utils'
+
+interface FloatingIconProps extends FloatingIconConfig {
+  targetElement: HTMLElement | null
+  isVisible?: boolean
 }
 
-export interface AnalysisOptions {
-  language?: string
-  depth?: 'quick' | 'standard' | 'detailed'
-  includeRecommendations?: boolean
-  includeSources?: boolean
-  customPrompt?: string
-}
-
-export interface AnalysisResult {
-  id: string
-  type: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  inputs: Record<string, any>
-  output?: any
-  metadata: {
-    startedAt: Date
-    completedAt?: Date
-    duration?: number
-    tokensUsed?: number
-    model?: string
-    error?: string
-  }
-  sections?: AnalysisSection[]
-  recommendations?: Recommendation[]
-  sources?: Source[]
-}
-
-export interface AnalysisSection {
-  id: string
-  title: string
-  content: string | any
-  type: 'text' | 'chart' | 'table' | 'list' | 'metric'
-  order: number
-  highlight?: boolean
-}
-
-export interface Recommendation {
-  id: string
-  title: string
-  description: string
-  priority: 'low' | 'medium' | 'high'
-  category: string
-  actionable: boolean
-  impact?: string
-}
-
-export interface Source {
-  title: string
-  url?: string
-  author?: string
-  date?: Date
-  relevance: number
-}
-
-export interface PromptTemplate {
-  id: string
-  name: string
-  description: string
-  template: string
-  variables: PromptVariable[]
-  category: string
-  examples?: Example[]
-}
-
-export interface PromptVariable {
-  name: string
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object'
-  required: boolean
-  default?: any
-  description?: string
-  validation?: (value: any) => boolean
-}
-
-export interface Example {
-  inputs: Record<string, any>
-  output: string
-}
-
-// src/modules/analysis/prompt-templates.ts
-import { PromptTemplate } from './types'
-
-export const promptTemplates: Record<string, PromptTemplate> = {
-  contentAnalysis: {
-    id: 'content-analysis',
-    name: 'Content Analysis',
-    description: 'Comprehensive analysis of text content',
-    category: 'content',
-    template: `Analyze the following content and provide a comprehensive analysis:
-
-Content: {{content}}
-
-Please analyze the following aspects:
-1. Main Topic and Theme
-2. Key Points and Arguments
-3. Writing Style and Tone
-4. Target Audience
-5. Strengths and Weaknesses
-6. Overall Quality Score (1-10)
-
-{{#if includeRecommendations}}
-Also provide specific recommendations for improvement.
-{{/if}}
-
-Format your response as a structured analysis with clear sections.`,
-    variables: [
-      {
-        name: 'content',
-        type: 'string',
-        required: true,
-        description: 'The content to analyze'
-      },
-      {
-        name: 'includeRecommendations',
-        type: 'boolean',
-        required: false,
-        default: true,
-        description: 'Whether to include improvement recommendations'
-      }
-    ]
-  },
-
-  sentimentAnalysis: {
-    id: 'sentiment-analysis',
-    name: 'Sentiment Analysis',
-    description: 'Analyze emotional tone and sentiment',
-    category: 'sentiment',
-    template: `Perform a detailed sentiment analysis on the following text:
-
-Text: {{text}}
-
-Analyze:
-1. Overall Sentiment (Positive/Negative/Neutral) with confidence score
-2. Emotional Tone (Professional/Casual/Formal/Informal/etc.)
-3. Detected Emotions (Joy, Anger, Sadness, Fear, Surprise, etc.) with intensities
-4. Sentiment Progression (if text is long enough)
-5. Key Phrases Contributing to Sentiment
-
-{{#if contextualFactors}}
-Consider these contextual factors: {{contextualFactors}}
-{{/if}}
-
-Provide specific examples from the text to support your analysis.`,
-    variables: [
-      {
-        name: 'text',
-        type: 'string',
-        required: true,
-        description: 'Text to analyze for sentiment'
-      },
-      {
-        name: 'contextualFactors',
-        type: 'string',
-        required: false,
-        description: 'Additional context to consider'
-      }
-    ]
-  },
-
-  seoAnalysis: {
-    id: 'seo-analysis',
-    name: 'SEO Analysis',
-    description: 'Search engine optimization analysis',
-    category: 'seo',
-    template: `Perform an SEO analysis for the following content:
-
-URL: {{url}}
-Title: {{title}}
-Meta Description: {{metaDescription}}
-Content: {{content}}
-
-Analyze:
-1. Title Tag Optimization (length, keywords, appeal)
-2. Meta Description Quality
-3. Keyword Usage and Density
-4. Content Structure (headings, paragraphs)
-5. Readability Score
-6. Internal/External Link Analysis
-7. Image Alt Text Usage
-8. Schema Markup Recommendations
-
-Target Keywords: {{#if keywords}}{{keywords}}{{else}}Identify from content{{/if}}
-
-Provide specific recommendations with priority levels.`,
-    variables: [
-      {
-        name: 'url',
-        type: 'string',
-        required: false,
-        description: 'Page URL'
-      },
-      {
-        name: 'title',
-        type: 'string',
-        required: true,
-        description: 'Page title'
-      },
-      {
-        name: 'metaDescription',
-        type: 'string',
-        required: false,
-        description: 'Meta description'
-      },
-      {
-        name: 'content',
-        type: 'string',
-        required: true,
-        description: 'Page content'
-      },
-      {
-        name: 'keywords',
-        type: 'array',
-        required: false,
-        description: 'Target keywords'
-      }
-    ]
-  },
-
-  readabilityAnalysis: {
-    id: 'readability-analysis',
-    name: 'Readability Analysis',
-    description: 'Assess content readability and accessibility',
-    category: 'readability',
-    template: `Analyze the readability of the following text:
-
-Text: {{text}}
-
-Provide analysis on:
-1. Reading Level (Grade level)
-2. Sentence Complexity
-   - Average sentence length
-   - Complex sentence ratio
-3. Vocabulary Difficulty
-   - Common vs. uncommon words
-   - Technical jargon usage
-4. Paragraph Structure
-5. Clarity and Coherence
-6. Accessibility Issues
-
-Target Audience: {{#if targetAudience}}{{targetAudience}}{{else}}General public{{/if}}
-
-Suggest specific improvements to enhance readability.`,
-    variables: [
-      {
-        name: 'text',
-        type: 'string',
-        required: true,
-        description: 'Text to analyze'
-      },
-      {
-        name: 'targetAudience',
-        type: 'string',
-        required: false,
-        description: 'Intended audience'
-      }
-    ]
-  },
-
-  factCheckAnalysis: {
-    id: 'fact-check-analysis',
-    name: 'Fact Check Analysis',
-    description: 'Identify and verify factual claims',
-    category: 'fact-check',
-    template: `Identify and analyze factual claims in the following content:
-
-Content: {{content}}
-
-For each claim:
-1. Extract the specific claim
-2. Categorize claim type (statistical, historical, scientific, etc.)
-3. Assess verifiability (can be fact-checked vs. opinion)
-4. Identify what evidence would be needed to verify
-5. Flag potential red flags or suspicious claims
-
-{{#if checkSources}}
-Also evaluate the credibility of any cited sources.
-{{/if}}
-
-Focus on claims that are:
-- Specific and measurable
-- Potentially misleading if false
-- Central to the argument
-
-Do not attempt to verify the claims, only identify and categorize them.`,
-    variables: [
-      {
-        name: 'content',
-        type: 'string',
-        required: true,
-        description: 'Content to analyze for claims'
-      },
-      {
-        name: 'checkSources',
-        type: 'boolean',
-        required: false,
-        default: true,
-        description: 'Whether to evaluate source credibility'
-      }
-    ]
-  },
-
-  biasAnalysis: {
-    id: 'bias-analysis',
-    name: 'Bias Analysis',
-    description: 'Detect potential biases in content',
-    category: 'bias',
-    template: `Analyze the following content for potential biases:
-
-Content: {{content}}
-{{#if author}}Author: {{author}}{{/if}}
-{{#if source}}Source: {{source}}{{/if}}
-
-Examine for:
-1. Political Bias (left/center/right leaning)
-2. Confirmation Bias Indicators
-3. Selection Bias in Examples/Data
-4. Language Bias (loaded words, framing)
-5. Cultural or Regional Bias
-6. Gender, Race, or Other Demographic Bias
-7. Commercial or Financial Bias
-
-For each detected bias:
-- Provide specific examples
-- Rate severity (minor/moderate/significant)
-- Suggest neutral alternatives
-
-Note: Aim for objective analysis without introducing your own biases.`,
-    variables: [
-      {
-        name: 'content',
-        type: 'string',
-        required: true,
-        description: 'Content to analyze'
-      },
-      {
-        name: 'author',
-        type: 'string',
-        required: false,
-        description: 'Content author'
-      },
-      {
-        name: 'source',
-        type: 'string',
-        required: false,
-        description: 'Content source'
-      }
-    ]
-  },
-
-  competitorAnalysis: {
-    id: 'competitor-analysis',
-    name: 'Competitor Content Analysis',
-    description: 'Compare content against competitors',
-    category: 'content',
-    template: `Compare and analyze the following content pieces:
-
-Your Content:
-{{yourContent}}
-
-Competitor Content:
-{{competitorContent}}
-
-Analyze:
-1. Content Depth and Coverage
-2. Unique Value Propositions
-3. Writing Quality and Style
-4. SEO Optimization Comparison
-5. Visual and Media Usage
-6. Call-to-Action Effectiveness
-7. Audience Engagement Potential
-
-Provide:
-- Strengths of each piece
-- Areas where competitor excels
-- Opportunities for improvement
-- Specific recommendations to outperform`,
-    variables: [
-      {
-        name: 'yourContent',
-        type: 'string',
-        required: true,
-        description: 'Your content'
-      },
-      {
-        name: 'competitorContent',
-        type: 'string',
-        required: true,
-        description: 'Competitor content'
-      }
-    ]
-  },
-
-  customAnalysis: {
-    id: 'custom-analysis',
-    name: 'Custom Analysis',
-    description: 'User-defined analysis',
-    category: 'custom',
-    template: `{{customPrompt}}
-
-Input: {{input}}
-
-{{#if additionalInstructions}}
-Additional Instructions: {{additionalInstructions}}
-{{/if}}`,
-    variables: [
-      {
-        name: 'customPrompt',
-        type: 'string',
-        required: true,
-        description: 'Custom analysis prompt'
-      },
-      {
-        name: 'input',
-        type: 'string',
-        required: true,
-        description: 'Input to analyze'
-      },
-      {
-        name: 'additionalInstructions',
-        type: 'string',
-        required: false,
-        description: 'Additional instructions'
-      }
-    ]
-  }
-}
-
-// Helper function to compile templates
-export function compileTemplate(template: string, variables: Record<string, any>): string {
-  let compiled = template
-
-  // Handle conditional blocks {{#if variable}}...{{/if}}
-  compiled = compiled.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, varName, content) => {
-    return variables[varName] ? content : ''
-  })
-
-  // Handle variable substitution {{variable}}
-  compiled = compiled.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
-    const value = variables[varName]
-    if (Array.isArray(value)) {
-      return value.join(', ')
-    }
-    return value?.toString() || ''
-  })
-
-  return compiled.trim()
-}
-
-// src/modules/analysis/analysis-types.ts
-import { AnalysisType } from './types'
-
-export const analysisTypes: Record<string, AnalysisType> = {
-  content: {
-    id: 'content',
-    name: 'Content Analysis',
-    description: 'Comprehensive analysis of text content including quality, structure, and effectiveness',
-    icon: '📝',
-    category: 'content',
-    requiredInputs: [
-      {
-        name: 'content',
-        type: 'text',
-        required: true,
-        maxLength: 50000,
-        description: 'The content to analyze'
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      sections: ['overview', 'key-points', 'quality-metrics', 'recommendations']
-    },
-    estimatedTime: 30,
-    aiRequired: true
-  },
-
-  sentiment: {
-    id: 'sentiment',
-    name: 'Sentiment Analysis',
-    description: 'Analyze emotional tone, sentiment polarity, and mood',
-    icon: '😊',
-    category: 'sentiment',
-    requiredInputs: [
-      {
-        name: 'text',
-        type: 'text',
-        required: true,
-        maxLength: 10000
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      schema: {
-        overall: 'string',
-        score: 'number',
-        emotions: 'object',
-        keywords: 'array'
-      }
-    },
-    estimatedTime: 10,
-    aiRequired: true
-  },
-
-  seo: {
-    id: 'seo',
-    name: 'SEO Analysis',
-    description: 'Search engine optimization analysis and recommendations',
-    icon: '🔍',
-    category: 'seo',
-    requiredInputs: [
-      {
-        name: 'content',
-        type: 'html',
-        required: true
-      },
-      {
-        name: 'url',
-        type: 'url',
-        required: false
-      },
-      {
-        name: 'keywords',
-        type: 'text',
-        required: false,
-        description: 'Target keywords (comma separated)'
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      sections: ['score', 'issues', 'recommendations', 'keyword-analysis']
-    },
-    estimatedTime: 45,
-    aiRequired: true
-  },
-
-  readability: {
-    id: 'readability',
-    name: 'Readability Analysis',
-    description: 'Assess reading difficulty and accessibility',
-    icon: '📖',
-    category: 'readability',
-    requiredInputs: [
-      {
-        name: 'text',
-        type: 'text',
-        required: true
-      },
-      {
-        name: 'targetAudience',
-        type: 'text',
-        required: false,
-        description: 'Target audience (e.g., "general public", "experts")'
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      sections: ['score', 'metrics', 'issues', 'suggestions']
-    },
-    estimatedTime: 15,
-    aiRequired: true
-  },
-
-  factCheck: {
-    id: 'fact-check',
-    name: 'Fact Check Analysis',
-    description: 'Identify factual claims for verification',
-    icon: '✓',
-    category: 'fact-check',
-    requiredInputs: [
-      {
-        name: 'content',
-        type: 'text',
-        required: true
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      sections: ['claims', 'sources', 'red-flags']
-    },
-    estimatedTime: 60,
-    aiRequired: true
-  },
-
-  bias: {
-    id: 'bias',
-    name: 'Bias Detection',
-    description: 'Detect various types of bias in content',
-    icon: '⚖️',
-    category: 'bias',
-    requiredInputs: [
-      {
-        name: 'content',
-        type: 'text',
-        required: true
-      },
-      {
-        name: 'context',
-        type: 'text',
-        required: false,
-        description: 'Additional context about the content'
-      }
-    ],
-    outputFormat: {
-      type: 'structured',
-      sections: ['bias-types', 'examples', 'severity', 'recommendations']
-    },
-    estimatedTime: 40,
-    aiRequired: true
-  },
-
-  summary: {
-    id: 'summary',
-    name: 'Smart Summary',
-    description: 'Generate intelligent summaries with key insights',
-    icon: '📋',
-    category: 'content',
-    requiredInputs: [
-      {
-        name: 'content',
-        type: 'text',
-        required: true
-      },
-      {
-        name: 'length',
-        type: 'text',
-        required: false,
-        description: 'Desired summary length (short/medium/long)'
-      }
-    ],
-    outputFormat: {
-      type: 'markdown',
-      sections: ['summary', 'key-points', 'insights']
-    },
-    estimatedTime: 20,
-    aiRequired: true
-  }
-}
-
-// src/modules/analysis/response-parser.ts
-import { AnalysisResult, AnalysisSection, Recommendation } from './types'
-
-export class ResponseParser {
-  /**
-   * Parse AI response into structured analysis result
-   */
-  static parseAnalysisResponse(
-    response: string,
-    analysisType: string,
-    format: 'structured' | 'markdown' | 'html' | 'json'
-  ): Partial<AnalysisResult> {
-    switch (format) {
-      case 'structured':
-        return this.parseStructuredResponse(response, analysisType)
-      case 'markdown':
-        return this.parseMarkdownResponse(response)
-      case 'json':
-        return this.parseJsonResponse(response)
-      case 'html':
-        return this.parseHtmlResponse(response)
-      default:
-        return { output: response }
-    }
-  }
-
-  private static parseStructuredResponse(response: string, analysisType: string): Partial<AnalysisResult> {
-    const sections: AnalysisSection[] = []
-    const recommendations: Recommendation[] = []
-
-    // Split response into sections based on headers
-    const sectionRegex = /^#+\s+(.+)$/gm
-    const parts = response.split(sectionRegex)
-
-    for (let i = 1; i < parts.length; i += 2) {
-      const title = parts[i].trim()
-      const content = parts[i + 1]?.trim() || ''
-
-      // Check if this is a recommendations section
-      if (title.toLowerCase().includes('recommendation')) {
-        recommendations.push(...this.extractRecommendations(content))
-      } else {
-        sections.push({
-          id: `section-${i}`,
-          title,
-          content: this.parseContent(content, analysisType),
-          type: this.detectSectionType(content),
-          order: Math.floor(i / 2)
-        })
-      }
-    }
-
-    return { sections, recommendations }
-  }
-
-  private static parseContent(content: string, analysisType: string): any {
-    // Check for specific patterns
-
-    // Metrics pattern (e.g., "Score: 8/10")
-    const metricsRegex = /^(.+?):\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+))?$/gm
-    const metrics: Record<string, any> = {}
-    let match
-
-    while ((match = metricsRegex.exec(content)) !== null) {
-      const [, label, value, max] = match
-      metrics[label.toLowerCase().replace(/\s+/g, '_')] = {
-        value: parseFloat(value),
-        max: max ? parseFloat(max) : undefined
-      }
-    }
-
-    if (Object.keys(metrics).length > 0) {
-      return { type: 'metrics', data: metrics, text: content }
-    }
-
-    // List pattern
-    const listRegex = /^[\-\*\d+\.]\s+(.+)$/gm
-    const listItems: string[] = []
-
-    while ((match = listRegex.exec(content)) !== null) {
-      listItems.push(match[1])
-    }
-
-    if (listItems.length > 0) {
-      return { type: 'list', items: listItems }
-    }
-
-    // Table pattern (simple markdown tables)
-    if (content.includes('|') && content.includes('---')) {
-      return this.parseTable(content)
-    }
-
-    // Default: return as text
-    return content
-  }
-
-  private static detectSectionType(content: string): 'text' | 'chart' | 'table' | 'list' | 'metric' {
-    if (typeof content === 'object') {
-      if (content.type === 'metrics') return 'metric'
-      if (content.type === 'list') return 'list'
-      if (content.type === 'table') return 'table'
-    }
-
-    // Check content patterns
-    if (content.includes('|') && content.includes('---')) return 'table'
-    if (/^[\-\*\d+\.]\s+/m.test(content)) return 'list'
-    if (/^\w+:\s*\d+/m.test(content)) return 'metric'
-
-    return 'text'
-  }
-
-  private static extractRecommendations(content: string): Recommendation[] {
-    const recommendations: Recommendation[] = []
-
-    // Split by line breaks or list items
-    const lines = content.split(/\n+/)
-
-    lines.forEach((line, index) => {
-      const trimmed = line.replace(/^[\-\*\d+\.]\s+/, '').trim()
-      if (!trimmed) return
-
-      // Try to extract priority from the line
-      let priority: 'low' | 'medium' | 'high' = 'medium'
-      let title = trimmed
-      let description = ''
-
-      // Check for priority indicators
-      if (/high\s*priority|critical|urgent/i.test(trimmed)) {
-        priority = 'high'
-      } else if (/low\s*priority|minor|optional/i.test(trimmed)) {
-        priority = 'low'
-      }
-
-      // Split title and description if there's a colon
-      const colonIndex = trimmed.indexOf(':')
-      if (colonIndex > 0) {
-        title = trimmed.substring(0, colonIndex).trim()
-        description = trimmed.substring(colonIndex + 1).trim()
-      }
-
-      recommendations.push({
-        id: `rec-${index}`,
-        title,
-        description,
-        priority,
-        category: 'general',
-        actionable: true
-      })
-    })
-
-    return recommendations
-  }
-
-  private static parseTable(content: string): any {
-    const lines = content.trim().split('\n')
-    const headers: string[] = []
-    const rows: any[] = []
-
-    lines.forEach((line, index) => {
-      if (line.includes('---')) return // Skip separator
-
-      const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell)
-
-      if (index === 0) {
-        headers.push(...cells)
-      } else {
-        const row: Record<string, string> = {}
-        cells.forEach((cell, i) => {
-          row[headers[i] || `col${i}`] = cell
-        })
-        rows.push(row)
-      }
-    })
-
-    return { type: 'table', headers, rows }
-  }
-
-  private static parseMarkdownResponse(response: string): Partial<AnalysisResult> {
-    return {
-      output: response,
-      sections: [{
-        id: 'markdown-content',
-        title: 'Analysis',
-        content: response,
-        type: 'text',
-        order: 0
-      }]
-    }
-  }
-
-  private static parseJsonResponse(response: string): Partial<AnalysisResult> {
-    try {
-      const parsed = JSON.parse(response)
-      return { output: parsed }
-    } catch (error) {
-      console.error('Failed to parse JSON response:', error)
-      return { output: response }
-    }
-  }
-
-  private static parseHtmlResponse(response: string): Partial<AnalysisResult> {
-    // Simple HTML parsing - in production, use a proper HTML parser
-    const div = document.createElement('div')
-    div.innerHTML = response
-
-    const sections: AnalysisSection[] = []
-
-    // Extract sections from headings
-    const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6')
-
-    headings.forEach((heading, index) => {
-      const title = heading.textContent || ''
-      const content = this.getContentUntilNextHeading(heading)
-
-      sections.push({
-        id: `section-${index}`,
-        title,
-        content,
-        type: 'text',
-        order: index
-      })
-    })
-
-    return { output: response, sections }
-  }
-
-  private static getContentUntilNextHeading(element: Element): string {
-    let content = ''
-    let sibling = element.nextElementSibling
-
-    while (sibling && !sibling.matches('h1, h2, h3, h4, h5, h6')) {
-      content += sibling.textContent + '\n'
-      sibling = sibling.nextElementSibling
-    }
-
-    return content.trim()
-  }
-
-  /**
-   * Extract key metrics from analysis
-   */
-  static extractMetrics(result: AnalysisResult): Record<string, any> {
-    const metrics: Record<string, any> = {}
-
-    result.sections?.forEach(section => {
-      if (section.type === 'metric' && typeof section.content === 'object') {
-        Object.assign(metrics, section.content.data)
-      }
-    })
-
-    return metrics
-  }
-
-  /**
-   * Extract all recommendations
-   */
-  static extractRecommendations(result: AnalysisResult): Recommendation[] {
-    return result.recommendations || []
-  }
-}
-
-// src/modules/analysis/result-formatter.ts
-import { AnalysisResult, AnalysisSection, Recommendation } from './types'
-
-export class ResultFormatter {
-  /**
-   * Format analysis result for UI display
-   */
-  static formatForUI(result: AnalysisResult, options: FormatterOptions = {}): FormattedResult {
-    const {
-      includeMetadata = true,
-      includeRecommendations = true,
-      includeSources = true,
-      highlightSections = [],
-      theme = 'light'
-    } = options
-
-    return {
-      id: result.id,
-      type: result.type,
-      status: result.status,
-      summary: this.generateSummary(result),
-      sections: this.formatSections(result.sections || [], highlightSections),
-      metrics: this.formatMetrics(result),
-      recommendations: includeRecommendations ? this.formatRecommendations(result.recommendations || []) : undefined,
-      sources: includeSources ? result.sources : undefined,
-      metadata: includeMetadata ? this.formatMetadata(result.metadata) : undefined,
-      theme
-    }
-  }
-
-  private static generateSummary(result: AnalysisResult): string {
-    // Extract key points from sections
-    const keyPoints: string[] = []
-
-    result.sections?.forEach(section => {
-      if (section.title.toLowerCase().includes('overview') ||
-          section.title.toLowerCase().includes('summary')) {
-        if (typeof section.content === 'string') {
-          keyPoints.push(section.content.substring(0, 200) + '...')
-        }
-      }
-    })
-
-    if (keyPoints.length === 0 && result.sections && result.sections.length > 0) {
-      const firstSection = result.sections[0]
-      if (typeof firstSection.content === 'string') {
-        keyPoints.push(firstSection.content.substring(0, 200) + '...')
-      }
-    }
-
-    return keyPoints.join(' ')
-  }
-
-  private static formatSections(sections: AnalysisSection[], highlightIds: string[]): FormattedSection[] {
-    return sections.map(section => ({
-      ...section,
-      highlight: highlightIds.includes(section.id) || section.highlight,
-      formatted: this.formatSectionContent(section)
-    }))
-  }
-
-  private static formatSectionContent(section: AnalysisSection): string | React.ReactNode {
-    switch (section.type) {
-      case 'metric':
-        return this.formatMetricContent(section.content)
-      case 'list':
-        return this.formatListContent(section.content)
-      case 'table':
-        return this.formatTableContent(section.content)
-      case 'chart':
-        return this.formatChartContent(section.content)
-      default:
-        return section.content
-    }
-  }
-
-  private static formatMetricContent(content: any): React.ReactNode {
-    if (typeof content !== 'object' || !content.data) return content
-
-    // Return a format that can be rendered as metric cards
-    return {
-      type: 'metrics',
-      metrics: Object.entries(content.data).map(([key, value]: [string, any]) => ({
-        label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        value: value.value,
-        max: value.max,
-        unit: value.unit,
-        format: value.value < 1 ? 'percentage' : 'number'
-      }))
-    }
-  }
-
-  private static formatListContent(content: any): React.ReactNode {
-    if (typeof content !== 'object' || !content.items) return content
-
-    return {
-      type: 'list',
-      items: content.items
-    }
-  }
-
-  private static formatTableContent(content: any): React.ReactNode {
-    if (typeof content !== 'object' || !content.headers) return content
-
-    return {
-      type: 'table',
-      headers: content.headers,
-      rows: content.rows
-    }
-  }
-
-  private static formatChartContent(content: any): React.ReactNode {
-    // Format for chart rendering
-    return {
-      type: 'chart',
-      data: content
-    }
-  }
-
-  private static formatMetrics(result: AnalysisResult): FormattedMetrics {
-    const metrics: FormattedMetrics = {
-      primary: [],
-      secondary: []
-    }
-
-    result.sections?.forEach(section => {
-      if (section.type === 'metric') {
-        const formatted = this.formatMetricContent(section.content)
-        if (typeof formatted === 'object' && formatted.type === 'metrics') {
-          metrics.primary.push(...formatted.metrics.slice(0, 3))
-          metrics.secondary.push(...formatted.metrics.slice(3))
-        }
-      }
-    })
-
-    return metrics
-  }
-
-  private static formatRecommendations(recommendations: Recommendation[]): FormattedRecommendation[] {
-    // Group by priority
-    const grouped = {
-      high: recommendations.filter(r => r.priority === 'high'),
-      medium: recommendations.filter(r => r.priority === 'medium'),
-      low: recommendations.filter(r => r.priority === 'low')
-    }
-
-    // Sort and format
-    return [
-      ...grouped.high,
-      ...grouped.medium,
-      ...grouped.low
-    ].map(rec => ({
-      ...rec,
-      icon: this.getRecommendationIcon(rec),
-      color: this.getRecommendationColor(rec.priority)
-    }))
-  }
-
-  private static getRecommendationIcon(rec: Recommendation): string {
-    if (rec.priority === 'high') return '🔴'
-    if (rec.priority === 'medium') return '🟡'
-    return '🟢'
-  }
-
-  private static getRecommendationColor(priority: string): string {
-    switch (priority) {
-      case 'high': return 'red'
-      case 'medium': return 'yellow'
-      case 'low': return 'green'
-      default: return 'gray'
-    }
-  }
-
-  private static formatMetadata(metadata: AnalysisResult['metadata']): FormattedMetadata {
-    return {
-      duration: metadata.duration ? `${(metadata.duration / 1000).toFixed(2)}s` : undefined,
-      tokensUsed: metadata.tokensUsed?.toLocaleString(),
-      model: metadata.model,
-      completedAt: metadata.completedAt ? new Date(metadata.completedAt).toLocaleString() : undefined
-    }
-  }
-
-  /**
-   * Export analysis result in various formats
-   */
-  static export(result: AnalysisResult, format: 'pdf' | 'html' | 'markdown' | 'json'): string | Blob {
-    switch (format) {
-      case 'markdown':
-        return this.exportAsMarkdown(result)
-      case 'html':
-        return this.exportAsHtml(result)
-      case 'json':
-        return JSON.stringify(result, null, 2)
-      case 'pdf':
-        // Would require additional library like jsPDF
-        return new Blob([this.exportAsHtml(result)], { type: 'application/pdf' })
-      default:
-        return JSON.stringify(result)
-    }
-  }
-
-  private static exportAsMarkdown(result: AnalysisResult): string {
-    let markdown = `# ${result.type} Analysis\n\n`
-
-    markdown += `**Status:** ${result.status}\n`
-    markdown += `**Date:** ${new Date(result.metadata.startedAt).toLocaleString()}\n\n`
-
-    result.sections?.forEach(section => {
-      markdown += `## ${section.title}\n\n`
-
-      if (typeof section.content === 'string') {
-        markdown += `${section.content}\n\n`
-      } else if (section.content.type === 'list') {
-        section.content.items.forEach((item: string) => {
-          markdown += `- ${item}\n`
-        })
-        markdown += '\n'
-      } else if (section.content.type === 'table') {
-        // Format as markdown table
-        markdown += '| ' + section.content.headers.join(' | ') + ' |\n'
-        markdown += '| ' + section.content.headers.map(() => '---').join(' | ') + ' |\n'
-        section.content.rows.forEach((row: any) => {
-          markdown += '| ' + Object.values(row).join(' | ') + ' |\n'
-        })
-        markdown += '\n'
-      }
-    })
-
-    if (result.recommendations && result.recommendations.length > 0) {
-      markdown += `## Recommendations\n\n`
-      result.recommendations.forEach(rec => {
-        markdown += `### ${rec.title} (${rec.priority} priority)\n`
-        markdown += `${rec.description}\n\n`
-      })
-    }
-
-    return markdown
-  }
-
-  private static exportAsHtml(result: AnalysisResult): string {
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>${result.type} Analysis</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-    h1 { color: #333; }
-    h2 { color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-    .metadata { background: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
-    .recommendation { margin: 10px 0; padding: 10px; border-left: 3px solid #007bff; background: #f0f8ff; }
-    .high-priority { border-color: #dc3545; background: #fff5f5; }
-    .medium-priority { border-color: #ffc107; background: #fffef5; }
-    .low-priority { border-color: #28a745; background: #f5fff5; }
-    table { border-collapse: collapse; width: 100%; margin: 10px 0; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f2f2f2; }
-  </style>
-</head>
-<body>
-  <h1>${result.type} Analysis</h1>
-
-  <div class="metadata">
-    <p><strong>Status:</strong> ${result.status}</p>
-    <p><strong>Date:</strong> ${new Date(result.metadata.startedAt).toLocaleString()}</p>
-    ${result.metadata.duration ? `<p><strong>Duration:</strong> ${(result.metadata.duration / 1000).toFixed(2)}s</p>` : ''}
-  </div>
-
-  ${result.sections?.map(section => `
-    <h2>${section.title}</h2>
-    ${this.formatSectionAsHtml(section)}
-  `).join('')}
-
-  ${result.recommendations && result.recommendations.length > 0 ? `
-    <h2>Recommendations</h2>
-    ${result.recommendations.map(rec => `
-      <div class="recommendation ${rec.priority}-priority">
-        <strong>${rec.title}</strong>
-        <p>${rec.description}</p>
-      </div>
-    `).join('')}
-  ` : ''}
-</body>
-</html>
-    `
-  }
-
-  private static formatSectionAsHtml(section: AnalysisSection): string {
-    if (typeof section.content === 'string') {
-      return `<p>${section.content.replace(/\n/g, '<br>')}</p>`
-    }
-
-    if (section.content.type === 'list') {
-      return `<ul>${section.content.items.map((item: string) => `<li>${item}</li>`).join('')}</ul>`
-    }
-
-    if (section.content.type === 'table') {
-      return `
-        <table>
-          <thead>
-            <tr>${section.content.headers.map((h: string) => `<th>${h}</th>`).join('')}</tr>
-          </thead>
-          <tbody>
-            ${section.content.rows.map((row: any) => `
-              <tr>${Object.values(row).map(cell => `<td>${cell}</td>`).join('')}</tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `
-    }
-
-    return ''
-  }
-}
-
-// Types for formatter
-interface FormatterOptions {
-  includeMetadata?: boolean
-  includeRecommendations?: boolean
-  includeSources?: boolean
-  highlightSections?: string[]
-  theme?: 'light' | 'dark'
-}
-
-interface FormattedResult {
-  id: string
-  type: string
-  status: string
-  summary: string
-  sections: FormattedSection[]
-  metrics: FormattedMetrics
-  recommendations?: FormattedRecommendation[]
-  sources?: any[]
-  metadata?: FormattedMetadata
-  theme: string
-}
-
-interface FormattedSection extends AnalysisSection {
-  formatted: string | React.ReactNode
-}
-
-interface FormattedMetrics {
-  primary: any[]
-  secondary: any[]
-}
-
-interface FormattedRecommendation extends Recommendation {
-  icon: string
-  color: string
-}
-
-interface FormattedMetadata {
-  duration?: string
-  tokensUsed?: string
-  model?: string
-  completedAt?: string
-}
-
-// src/modules/analysis/analysis-engine.ts
-import { v4 as uuidv4 } from 'uuid'
-import { aiService } from '../ai/ai-service'
-import {
-  AnalysisRequest,
-  AnalysisResult,
-  AnalysisType,
-  PromptTemplate
-} from './types'
-import { promptTemplates, compileTemplate } from './prompt-templates'
-import { analysisTypes } from './analysis-types'
-import { ResponseParser } from './response-parser'
-import { ResultFormatter } from './result-formatter'
-
-export class AnalysisEngine {
-  private activeAnalyses: Map<string, AnalysisResult> = new Map()
-  private analysisHistory: AnalysisResult[] = []
-  private maxHistorySize: number = 100
-
-  /**
-   * Run an analysis based on type and inputs
-   */
-  async analyze(request: AnalysisRequest): Promise<AnalysisResult> {
-    const analysisId = uuidv4()
-    const analysisType = analysisTypes[request.type]
-
-    if (!analysisType) {
-      throw new Error(`Unknown analysis type: ${request.type}`)
-    }
-
-    // Validate inputs
-    this.validateInputs(request.inputs, analysisType)
-
-    // Create initial result
-    const result: AnalysisResult = {
-      id: analysisId,
-      type: request.type,
-      status: 'pending',
-      inputs: request.inputs,
-      metadata: {
-        startedAt: new Date()
-      }
-    }
-
-    this.activeAnalyses.set(analysisId, result)
-
-    try {
-      // Update status
-      result.status = 'processing'
-
-      // Get appropriate prompt template
-      const template = promptTemplates[request.type] || promptTemplates.customAnalysis
-
-      // Compile prompt with inputs
-      const prompt = this.compilePrompt(template, request)
-
-      // Call AI service
-      const startTime = Date.now()
-      const aiResponse = await aiService.generateText(prompt, {
-        temperature: 0.7,
-        maxTokens: 2000,
-        systemPrompt: this.getSystemPrompt(analysisType)
-      })
-      const endTime = Date.now()
-
-      // Parse response
-      const parsedResult = ResponseParser.parseAnalysisResponse(
-        aiResponse,
-        request.type,
-        analysisType.outputFormat.type
-      )
-
-      // Update result
-      Object.assign(result, parsedResult)
-      result.status = 'completed'
-      result.metadata.completedAt = new Date()
-      result.metadata.duration = endTime - startTime
-
-      // Store in history
-      this.addToHistory(result)
-
-      return result
-
-    } catch (error) {
-      result.status = 'failed'
-      result.metadata.error = error.message
-      result.metadata.completedAt = new Date()
-
-      this.addToHistory(result)
-      throw error
-
-    } finally {
-      this.activeAnalyses.delete(analysisId)
-    }
-  }
-
-  /**
-   * Run multiple analyses in parallel
-   */
-  async analyzeMultiple(requests: AnalysisRequest[]): Promise<AnalysisResult[]> {
-    const promises = requests.map(request => this.analyze(request))
-    return Promise.all(promises)
-  }
-
-  /**
-   * Stream analysis results (for long-running analyses)
-   */
-  async *analyzeStream(request: AnalysisRequest): AsyncGenerator<Partial<AnalysisResult>> {
-    const analysisId = uuidv4()
-    const analysisType = analysisTypes[request.type]
-
-    if (!analysisType) {
-      throw new Error(`Unknown analysis type: ${request.type}`)
-    }
-
-    // Initial result
-    yield {
-      id: analysisId,
-      type: request.type,
-      status: 'pending',
-      inputs: request.inputs,
-      metadata: { startedAt: new Date() }
-    }
-
-    try {
-      // Update status
-      yield { status: 'processing' }
-
-      // Get template and compile prompt
-      const template = promptTemplates[request.type] || promptTemplates.customAnalysis
-      const prompt = this.compilePrompt(template, request)
-
-      // Stream AI response
-      const stream = await aiService.generateText(prompt, {
-        temperature: 0.7,
-        maxTokens: 2000,
-        stream: true,
-        systemPrompt: this.getSystemPrompt(analysisType)
-      })
-
-      let fullResponse = ''
-      for await (const chunk of stream) {
-        fullResponse += chunk
-
-        // Periodically parse and yield partial results
-        if (fullResponse.length % 500 === 0) {
-          const partial = ResponseParser.parseAnalysisResponse(
-            fullResponse,
-            request.type,
-            analysisType.outputFormat.type
-          )
-          yield partial
-        }
-      }
-
-      // Final parse
-      const finalResult = ResponseParser.parseAnalysisResponse(
-        fullResponse,
-        request.type,
-        analysisType.outputFormat.type
-      )
-
-      yield {
-        ...finalResult,
-        status: 'completed',
-        metadata: {
-          completedAt: new Date()
-        }
-      }
-
-    } catch (error) {
-      yield {
-        status: 'failed',
-        metadata: {
-          error: error.message,
-          completedAt: new Date()
-        }
-      }
-    }
-  }
-
-  /**
-   * Get analysis by ID
-   */
-  getAnalysis(id: string): AnalysisResult | undefined {
-    // Check active analyses
-    const active = this.activeAnalyses.get(id)
-    if (active) return active
-
-    // Check history
-    return this.analysisHistory.find(a => a.id === id)
-  }
-
-  /**
-   * Get analysis history
-   */
-  getHistory(options?: {
-    type?: string
-    status?: string
-    limit?: number
-    offset?: number
-  }): AnalysisResult[] {
-    let results = [...this.analysisHistory]
-
-    if (options?.type) {
-      results = results.filter(r => r.type === options.type)
-    }
-
-    if (options?.status) {
-      results = results.filter(r => r.status === options.status)
-    }
-
-    if (options?.offset) {
-      results = results.slice(options.offset)
-    }
-
-    if (options?.limit) {
-      results = results.slice(0, options.limit)
-    }
-
-    return results
-  }
-
-  /**
-   * Clear analysis history
-   */
-  clearHistory() {
-    this.analysisHistory = []
-  }
-
-  /**
-   * Get available analysis types
-   */
-  getAvailableTypes(): AnalysisType[] {
-    return Object.values(analysisTypes)
-  }
-
-  /**
-   * Get analysis type by ID
-   */
-  getAnalysisType(id: string): AnalysisType | undefined {
-    return analysisTypes[id]
-  }
-
-  /**
-   * Register custom analysis type
-   */
-  registerAnalysisType(type: AnalysisType, template?: PromptTemplate) {
-    analysisTypes[type.id] = type
-
-    if (template) {
-      promptTemplates[type.id] = template
-    }
-  }
-
-  // Private methods
-
-  private validateInputs(inputs: Record<string, any>, analysisType: AnalysisType) {
-    for (const input of analysisType.requiredInputs) {
-      if (input.required && !inputs[input.name]) {
-        throw new Error(`Missing required input: ${input.name}`)
-      }
-
-      if (input.maxLength && inputs[input.name]?.length > input.maxLength) {
-        throw new Error(`Input "${input.name}" exceeds maximum length of ${input.maxLength}`)
-      }
-    }
-  }
-
-  private compilePrompt(template: PromptTemplate, request: AnalysisRequest): string {
-    const variables: Record<string, any> = {
-      ...request.inputs,
-      ...request.options
-    }
-
-    // Add default values
-    template.variables.forEach(variable => {
-      if (variable.default !== undefined && variables[variable.name] === undefined) {
-        variables[variable.name] = variable.default
-      }
-    })
-
-    return compileTemplate(template.template, variables)
-  }
-
-  private getSystemPrompt(analysisType: AnalysisType): string {
-    return `You are an expert analyst specializing in ${analysisType.name}.
-Provide detailed, actionable insights based on the input provided.
-Structure your response clearly with appropriate sections and formatting.
-Be objective, thorough, and highlight both strengths and areas for improvement.`
-  }
-
-  private addToHistory(result: AnalysisResult) {
-    this.analysisHistory.unshift(result)
-
-    // Trim history if needed
-    if (this.analysisHistory.length > this.maxHistorySize) {
-      this.analysisHistory = this.analysisHistory.slice(0, this.maxHistorySize)
-    }
-  }
-}
-
-// Singleton instance
-export const analysisEngine = new AnalysisEngine()
-
-// src/modules/analysis/hooks/useAnalysis.ts
-import { useState, useCallback } from 'react'
-import { analysisEngine } from '../analysis-engine'
-import { AnalysisRequest, AnalysisResult, AnalysisOptions } from '../types'
-
-export function useAnalysis() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-  const [result, setResult] = useState<AnalysisResult | null>(null)
-
-  const analyze = useCallback(async (
-    type: string,
-    inputs: Record<string, any>,
-    options?: AnalysisOptions
-  ) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const request: AnalysisRequest = { type, inputs, options }
-      const analysisResult = await analysisEngine.analyze(request)
-      setResult(analysisResult)
-      return analysisResult
-    } catch (err) {
-      setError(err as Error)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const analyzeMultiple = useCallback(async (requests: AnalysisRequest[]) => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const results = await analysisEngine.analyzeMultiple(requests)
-      return results
-    } catch (err) {
-      setError(err as Error)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const clear = useCallback(() => {
-    setResult(null)
-    setError(null)
-  }, [])
-
-  return {
-    analyze,
-    analyzeMultiple,
-    result,
-    loading,
-    error,
-    clear
-  }
-}
-
-// src/modules/analysis/hooks/useAnalysisStream.ts
-import { useState, useCallback, useRef } from 'react'
-import { analysisEngine } from '../analysis-engine'
-import { AnalysisRequest, AnalysisResult } from '../types'
-
-export function useAnalysisStream() {
-  const [result, setResult] = useState<Partial<AnalysisResult> | null>(null)
-  const [streaming, setStreaming] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
-
-  const startStream = useCallback(async (request: AnalysisRequest) => {
-    setStreaming(true)
-    setError(null)
-    setResult(null)
-
-    abortControllerRef.current = new AbortController()
-
-    try {
-      const stream = analysisEngine.analyzeStream(request)
-
-      for await (const partial of stream) {
-        if (abortControllerRef.current?.signal.aborted) {
-          break
-        }
-
-        setResult(current => ({ ...current, ...partial }))
-      }
-    } catch (err) {
-      setError(err as Error)
-    } finally {
-      setStreaming(false)
-    }
-  }, [])
-
-  const stopStream = useCallback(() => {
-    abortControllerRef.current?.abort()
-    setStreaming(false)
-  }, [])
-
-  return {
-    result,
-    streaming,
-    error,
-    startStream,
-    stopStream
-  }
-}
-
-// src/modules/analysis/analysis-provider.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { analysisEngine } from './analysis-engine'
-import { AnalysisType, AnalysisResult } from './types'
-
-interface AnalysisContextValue {
-  availableTypes: AnalysisType[]
-  history: AnalysisResult[]
-  getAnalysis: (id: string) => AnalysisResult | undefined
-  clearHistory: () => void
-}
-
-const AnalysisContext = createContext<AnalysisContextValue | null>(null)
-
-export function AnalysisProvider({ children }: { children: React.ReactNode }) {
-  const [availableTypes, setAvailableTypes] = useState<AnalysisType[]>([])
-  const [history, setHistory] = useState<AnalysisResult[]>([])
+export function FloatingIcon({
+  targetElement,
+  icon,
+  tooltip,
+  onClick,
+  onHover,
+  position = 'left',
+  offset = 20,
+  showOn = 'hover',
+  className,
+  delay = 300,
+  isVisible: externalIsVisible
+}: FloatingIconProps) {
+  const [isVisible, setIsVisible] = useState(false)
+  const [iconPosition, setIconPosition] = useState<Position>({ x: 0, y: 0 })
+  const timeoutRef = useRef<NodeJS.Timeout>()
+  const iconRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Load available analysis types
-    setAvailableTypes(analysisEngine.getAvailableTypes())
+    if (!targetElement) return
 
-    // Load history
-    setHistory(analysisEngine.getHistory({ limit: 50 }))
+    const updatePosition = () => {
+      const rect = targetElement.getBoundingClientRect()
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+
+      const x = position === 'left'
+        ? rect.left + scrollLeft - offset - 40 // 40 is icon width
+        : rect.right + scrollLeft + offset
+
+      const y = rect.top + scrollTop + (rect.height / 2) - 20 // Center vertically
+
+      setIconPosition({ x, y })
+    }
+
+    const handleMouseEnter = () => {
+      if (showOn === 'hover') {
+        timeoutRef.current = setTimeout(() => {
+          setIsVisible(true)
+          updatePosition()
+        }, delay)
+      }
+    }
+
+    const handleMouseLeave = () => {
+      if (showOn === 'hover') {
+        clearTimeout(timeoutRef.current)
+        setIsVisible(false)
+      }
+    }
+
+    const handleSelection = () => {
+      if (showOn === 'selection') {
+        const selection = window.getSelection()
+        if (selection && selection.toString().trim() && targetElement.contains(selection.anchorNode)) {
+          updatePosition()
+          setIsVisible(true)
+        } else {
+          setIsVisible(false)
+        }
+      }
+    }
+
+    // Event listeners
+    targetElement.addEventListener('mouseenter', handleMouseEnter)
+    targetElement.addEventListener('mouseleave', handleMouseLeave)
+
+    if (showOn === 'selection') {
+      document.addEventListener('selectionchange', handleSelection)
+    }
+
+    // Update position on scroll/resize
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+
+    // Initial setup
+    if (showOn === 'always') {
+      setIsVisible(true)
+      updatePosition()
+    }
+
+    return () => {
+      clearTimeout(timeoutRef.current)
+      targetElement.removeEventListener('mouseenter', handleMouseEnter)
+      targetElement.removeEventListener('mouseleave', handleMouseLeave)
+      document.removeEventListener('selectionchange', handleSelection)
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [targetElement, position, offset, showOn, delay])
+
+  // Handle external visibility control
+  useEffect(() => {
+    if (externalIsVisible !== undefined) {
+      setIsVisible(externalIsVisible)
+    }
+  }, [externalIsVisible])
+
+  const portalElement = useMemo(() => {
+    const container = document.getElementById('extension-portal-container')
+    if (container) return container
+
+    const newContainer = document.createElement('div')
+    newContainer.id = 'extension-portal-container'
+    document.body.appendChild(newContainer)
+    return newContainer
   }, [])
 
-  const getAnalysis = (id: string) => {
-    return analysisEngine.getAnalysis(id)
-  }
+  if (!targetElement) return null
 
-  const clearHistory = () => {
-    analysisEngine.clearHistory()
-    setHistory([])
-  }
-
-  return (
-    <AnalysisContext.Provider value={{
-      availableTypes,
-      history,
-      getAnalysis,
-      clearHistory
-    }}>
-      {children}
-    </AnalysisContext.Provider>
+  return createPortal(
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          ref={iconRef}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.2 }}
+          style={{
+            position: 'absolute',
+            left: iconPosition.x,
+            top: iconPosition.y,
+            zIndex: 9999
+          }}
+          className={cn(
+            'flex items-center justify-center w-10 h-10 bg-white dark:bg-gray-800 rounded-full shadow-lg cursor-pointer hover:shadow-xl transition-shadow',
+            className
+          )}
+          onClick={onClick}
+          onMouseEnter={onHover}
+        >
+          {icon}
+          {tooltip && (
+            <div className="absolute bottom-full mb-2 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+              {tooltip}
+              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    portalElement
   )
 }
 
-export function useAnalysisContext() {
-  const context = useContext(AnalysisContext)
-  if (!context) {
-    throw new Error('useAnalysisContext must be used within AnalysisProvider')
+// Hook for easy usage
+export function useFloatingIcon(config: FloatingIconConfig) {
+  const [targetElement, setTargetElement] = useState<HTMLElement | null>(null)
+
+  const attach = (element: HTMLElement) => {
+    setTargetElement(element)
   }
-  return context
+
+  const detach = () => {
+    setTargetElement(null)
+  }
+
+  const FloatingIconComponent = () => (
+    <FloatingIcon {...config} targetElement={targetElement} />
+  )
+
+  return { attach, detach, FloatingIconComponent }
 }
 
-// src/modules/analysis/components/analysis-runner.tsx
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Textarea } from '~components/ui/textarea'
-import { Input } from '~components/ui/input'
-import { Label } from '~components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
-import { Alert, AlertDescription } from '~components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Badge } from '~components/ui/badge'
-import { Loader2, Play, FileText, BarChart, AlertCircle } from 'lucide-react'
-import { useAnalysis } from '../hooks/useAnalysis'
-import { useAnalysisContext } from '../analysis-provider'
-import { AnalysisType } from '../types'
+// src/modules/ui-components/context-menu.tsx
+import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronRight } from 'lucide-react'
+import { ContextMenuItem, Position } from './types'
+import { cn } from '~lib/utils'
 
-export function AnalysisRunner() {
-  const { availableTypes } = useAnalysisContext()
-  const { analyze, result, loading, error } = useAnalysis()
+interface ContextMenuProps {
+  items: ContextMenuItem[]
+  position: Position
+  onClose: () => void
+  className?: string
+}
 
-  const [selectedType, setSelectedType] = useState<string>('')
-  const [inputs, setInputs] = useState<Record<string, any>>({})
-  const [options, setOptions] = useState({
-    depth: 'standard' as 'quick' | 'standard' | 'detailed',
-    includeRecommendations: true,
-    includeSources: true
-  })
+export function ContextMenu({ items, position, onClose, className }: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [adjustedPosition, setAdjustedPosition] = useState(position)
+  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null)
 
-  const selectedAnalysisType = availableTypes.find(t => t.id === selectedType)
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose()
+      }
+    }
 
-  const handleInputChange = (name: string, value: any) => {
-    setInputs(prev => ({ ...prev, [name]: value }))
-  }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
 
-  const handleAnalyze = async () => {
-    if (!selectedType) return
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
 
-    try {
-      await analyze(selectedType, inputs, options)
-    } catch (err) {
-      console.error('Analysis failed:', err)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [onClose])
+
+  useEffect(() => {
+    if (menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
+
+      let x = position.x
+      let y = position.y
+
+      // Adjust horizontal position
+      if (x + rect.width > viewportWidth) {
+        x = viewportWidth - rect.width - 10
+      }
+
+      // Adjust vertical position
+      if (y + rect.height > viewportHeight) {
+        y = viewportHeight - rect.height - 10
+      }
+
+      setAdjustedPosition({ x, y })
+    }
+  }, [position])
+
+  const handleItemClick = (item: ContextMenuItem) => {
+    if (!item.disabled && !item.children) {
+      item.onClick?.()
+      onClose()
     }
   }
 
-  const canAnalyze = selectedType &&
-    selectedAnalysisType?.requiredInputs.every(input =>
-      !input.required || inputs[input.name]
+  const renderMenuItem = (item: ContextMenuItem, index: number) => {
+    if (item.separator) {
+      return <div key={item.id || index} className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+    }
+
+    const hasChildren = item.children && item.children.length > 0
+
+    return (
+      <div
+        key={item.id || index}
+        className={cn(
+          'relative px-3 py-2 text-sm cursor-pointer rounded-md transition-colors',
+          'hover:bg-gray-100 dark:hover:bg-gray-700',
+          item.disabled && 'opacity-50 cursor-not-allowed',
+          item.danger && 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+        )}
+        onClick={() => handleItemClick(item)}
+        onMouseEnter={() => hasChildren && setActiveSubmenu(item.id)}
+        onMouseLeave={() => hasChildren && setActiveSubmenu(null)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {item.icon && <span className="w-4 h-4">{item.icon}</span>}
+            <span>{item.label}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {item.shortcut && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">{item.shortcut}</span>
+            )}
+            {hasChildren && <ChevronRight className="w-4 h-4" />}
+          </div>
+        </div>
+
+        {/* Submenu */}
+        {hasChildren && activeSubmenu === item.id && (
+          <div
+            className={cn(
+              'absolute left-full top-0 ml-1 min-w-[200px]',
+              'bg-white dark:bg-gray-800 rounded-lg shadow-lg',
+              'border border-gray-200 dark:border-gray-700 p-1'
+            )}
+          >
+            {item.children.map((child, idx) => renderMenuItem(child, idx))}
+          </div>
+        )}
+      </div>
     )
+  }
+
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        ref={menuRef}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.1 }}
+        style={{
+          position: 'fixed',
+          left: adjustedPosition.x,
+          top: adjustedPosition.y,
+          zIndex: 10000
+        }}
+        className={cn(
+          'min-w-[200px] bg-white dark:bg-gray-800 rounded-lg shadow-lg',
+          'border border-gray-200 dark:border-gray-700 p-1',
+          className
+        )}
+      >
+        {items.map((item, index) => renderMenuItem(item, index))}
+      </motion.div>
+    </AnimatePresence>,
+    document.body
+  )
+}
+
+// Hook for context menu
+export function useContextMenu() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [position, setPosition] = useState<Position>({ x: 0, y: 0 })
+  const [items, setItems] = useState<ContextMenuItem[]>([])
+
+  const open = (event: MouseEvent, menuItems: ContextMenuItem[]) => {
+    event.preventDefault()
+    setPosition({ x: event.clientX, y: event.clientY })
+    setItems(menuItems)
+    setIsOpen(true)
+  }
+
+  const close = () => {
+    setIsOpen(false)
+  }
+
+  const ContextMenuComponent = () =>
+    isOpen ? <ContextMenu items={items} position={position} onClose={close} /> : null
+
+  return { open, close, ContextMenuComponent }
+}
+
+// src/modules/ui-components/sidebar.tsx
+import React, { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, PanInfo } from 'framer-motion'
+import { X, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
+import { SidebarConfig } from './types'
+import { cn } from '~lib/utils'
+
+interface SidebarProps extends SidebarConfig {
+  isOpen: boolean
+  onClose: () => void
+  children: React.ReactNode
+  title?: string
+}
+
+export function Sidebar({
+  isOpen,
+  onClose,
+  children,
+  title,
+  position = 'right',
+  width = 400,
+  minWidth = 300,
+  maxWidth = 600,
+  resizable = true,
+  collapsible = true,
+  overlay = true,
+  pushContent = false,
+  className,
+  zIndex = 9998
+}: SidebarProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(
+    typeof width === 'number' ? width : parseInt(width)
+  )
+  const [isResizing, setIsResizing] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+
+  // Handle resize
+  const handleResizeStart = () => {
+    setIsResizing(true)
+  }
+
+  const handleResize = (event: MouseEvent) => {
+    if (!isResizing) return
+
+    const newWidth = position === 'left'
+      ? event.clientX
+      : window.innerWidth - event.clientX
+
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
+      setSidebarWidth(newWidth)
+    }
+  }
+
+  const handleResizeEnd = () => {
+    setIsResizing(false)
+  }
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResize)
+      document.addEventListener('mouseup', handleResizeEnd)
+      document.body.style.cursor = 'ew-resize'
+      document.body.style.userSelect = 'none'
+
+      return () => {
+        document.removeEventListener('mousemove', handleResize)
+        document.removeEventListener('mouseup', handleResizeEnd)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [isResizing])
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyPress)
+    return () => document.removeEventListener('keydown', handleKeyPress)
+  }, [isOpen, onClose])
+
+  const sidebarVariants = {
+    open: {
+      x: 0,
+      width: isCollapsed ? 50 : sidebarWidth,
+      transition: { type: 'spring', damping: 30, stiffness: 300 }
+    },
+    closed: {
+      x: position === 'left' ? -sidebarWidth - 50 : sidebarWidth + 50,
+      transition: { type: 'spring', damping: 30, stiffness: 300 }
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Run Analysis</CardTitle>
-          <CardDescription>
-            Select an analysis type and provide the required inputs
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Analysis Type</Label>
-            <Select value={selectedType} onValueChange={setSelectedType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select analysis type" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableTypes.map(type => (
-                  <SelectItem key={type.id} value={type.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{type.icon}</span>
-                      <span>{type.name}</span>
-                      {type.aiRequired && (
-                        <Badge variant="outline" className="ml-2">AI</Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <>
+      {/* Overlay */}
+      <AnimatePresence>
+        {isOpen && overlay && !pushContent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.5 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black"
+            style={{ zIndex: zIndex - 1 }}
+            onClick={onClose}
+          />
+        )}
+      </AnimatePresence>
 
-          {selectedAnalysisType && (
-            <>
-              <div className="text-sm text-muted-foreground">
-                {selectedAnalysisType.description}
-              </div>
-
-              <div className="space-y-4">
-                {selectedAnalysisType.requiredInputs.map(input => (
-                  <div key={input.name} className="space-y-2">
-                    <Label>
-                      {input.name.charAt(0).toUpperCase() + input.name.slice(1)}
-                      {input.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {input.description && (
-                      <p className="text-xs text-muted-foreground">{input.description}</p>
-                    )}
-                    {input.type === 'text' && input.maxLength && input.maxLength > 500 ? (
-                      <Textarea
-                        value={inputs[input.name] || ''}
-                        onChange={(e) => handleInputChange(input.name, e.target.value)}
-                        placeholder={`Enter ${input.name}...`}
-                        maxLength={input.maxLength}
-                        rows={5}
-                      />
-                    ) : (
-                      <Input
-                        type={input.type === 'url' ? 'url' : 'text'}
-                        value={inputs[input.name] || ''}
-                        onChange={(e) => handleInputChange(input.name, e.target.value)}
-                        placeholder={`Enter ${input.name}...`}
-                        maxLength={input.maxLength}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-4 pt-4 border-t">
-                <Label>Analysis Options</Label>
-                <div className="space-y-2">
-                  <Label className="text-sm">Depth</Label>
-                  <Select
-                    value={options.depth}
-                    onValueChange={(value: any) => setOptions(prev => ({ ...prev, depth: value }))}
+      {/* Sidebar */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            ref={sidebarRef}
+            variants={sidebarVariants}
+            initial="closed"
+            animate="open"
+            exit="closed"
+            className={cn(
+              'fixed top-0 h-full bg-white dark:bg-gray-900 shadow-xl',
+              position === 'left' ? 'left-0' : 'right-0',
+              className
+            )}
+            style={{
+              zIndex,
+              width: isCollapsed ? 50 : sidebarWidth
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+              {!isCollapsed && (
+                <>
+                  <h2 className="text-lg font-semibold">{title}</h2>
+                  <button
+                    onClick={onClose}
+                    className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="quick">Quick (Fast overview)</SelectItem>
-                      <SelectItem value="standard">Standard (Balanced)</SelectItem>
-                      <SelectItem value="detailed">Detailed (Comprehensive)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <X className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+              {collapsible && (
+                <button
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  className={cn(
+                    'p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
+                    isCollapsed && 'mx-auto'
+                  )}
+                >
+                  {position === 'left' ? (
+                    isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />
+                  ) : (
+                    isCollapsed ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Content */}
+            {!isCollapsed && (
+              <div className="flex-1 overflow-y-auto p-4">
+                {children}
+              </div>
+            )}
+
+            {/* Resize Handle */}
+            {resizable && !isCollapsed && (
+              <div
+                className={cn(
+                  'absolute top-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 transition-colors',
+                  position === 'left' ? 'right-0' : 'left-0'
+                )}
+                onMouseDown={handleResizeStart}
+              >
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <GripVertical className="w-3 h-3 text-gray-400" />
                 </div>
               </div>
-            </>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button
-            className="w-full"
-            onClick={handleAnalyze}
-            disabled={!canAnalyze || loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Play className="mr-2 h-4 w-4" />
-                Run Analysis
-              </>
             )}
-          </Button>
-        </CardContent>
-      </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {result && <AnalysisResultView result={result} />}
+      {/* Push content style */}
+      {pushContent && isOpen && (
+        <style jsx global>{`
+          body {
+            margin-${position}: ${isCollapsed ? 50 : sidebarWidth}px !important;
+            transition: margin 0.3s ease;
+          }
+        `}</style>
+      )}
+    </>
+  )
+}
+
+// Hook for sidebar
+export function useSidebar(config?: Partial<SidebarConfig>) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  const open = () => setIsOpen(true)
+  const close = () => setIsOpen(false)
+  const toggle = () => setIsOpen(!isOpen)
+
+  const SidebarComponent = ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <Sidebar
+      {...config}
+      isOpen={isOpen}
+      onClose={close}
+      title={title}
+    >
+      {children}
+    </Sidebar>
+  )
+
+  return { isOpen, open, close, toggle, SidebarComponent }
+}
+
+// src/modules/ui-components/mini-menu.tsx
+import React, { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronDown } from 'lucide-react'
+import { cn } from '~lib/utils'
+
+interface MiniMenuItem {
+  id: string
+  label: string
+  icon?: React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  selected?: boolean
+}
+
+interface MiniMenuProps {
+  items: MiniMenuItem[]
+  trigger?: React.ReactNode
+  label?: string
+  className?: string
+  position?: 'bottom' | 'top' | 'left' | 'right'
+  align?: 'start' | 'center' | 'end'
+  offset?: number
+}
+
+export function MiniMenu({
+  items,
+  trigger,
+  label,
+  className,
+  position = 'bottom',
+  align = 'start',
+  offset = 8
+}: MiniMenuProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        menuRef.current &&
+        triggerRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        !triggerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const positionClasses = {
+    bottom: `top-full mt-${offset / 4}`,
+    top: `bottom-full mb-${offset / 4}`,
+    left: `right-full mr-${offset / 4}`,
+    right: `left-full ml-${offset / 4}`
+  }
+
+  const alignClasses = {
+    start: position === 'bottom' || position === 'top' ? 'left-0' : 'top-0',
+    center: position === 'bottom' || position === 'top' ? 'left-1/2 -translate-x-1/2' : 'top-1/2 -translate-y-1/2',
+    end: position === 'bottom' || position === 'top' ? 'right-0' : 'bottom-0'
+  }
+
+  return (
+    <div className="relative inline-block">
+      <button
+        ref={triggerRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          'flex items-center gap-1 px-3 py-2 rounded-md transition-colors',
+          'hover:bg-gray-100 dark:hover:bg-gray-800',
+          isOpen && 'bg-gray-100 dark:bg-gray-800',
+          className
+        )}
+      >
+        {trigger || (
+          <>
+            {label && <span className="text-sm">{label}</span>}
+            <ChevronDown className={cn(
+              'w-4 h-4 transition-transform',
+              isOpen && 'rotate-180'
+            )} />
+          </>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            ref={menuRef}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.1 }}
+            className={cn(
+              'absolute z-50 min-w-[150px] py-1',
+              'bg-white dark:bg-gray-800 rounded-md shadow-lg',
+              'border border-gray-200 dark:border-gray-700',
+              positionClasses[position],
+              alignClasses[align]
+            )}
+          >
+            {items.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (!item.disabled) {
+                    item.onClick?.()
+                    setIsOpen(false)
+                  }
+                }}
+                disabled={item.disabled}
+                className={cn(
+                  'w-full px-3 py-2 text-left text-sm transition-colors',
+                  'hover:bg-gray-100 dark:hover:bg-gray-700',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  item.selected && 'bg-gray-100 dark:bg-gray-700 font-medium'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {item.icon && <span className="w-4 h-4">{item.icon}</span>}
+                  <span>{item.label}</span>
+                </div>
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-// src/modules/analysis/components/analysis-result-view.tsx
-import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Badge } from '~components/ui/badge'
-import { Button } from '~components/ui/button'
-import { Progress } from '~components/ui/progress'
-import {
-  FileDown,
-  Copy,
-  Share,
-  CheckCircle,
-  AlertCircle,
-  Info,
-  TrendingUp,
-  TrendingDown
-} from 'lucide-react'
-import { AnalysisResult, AnalysisSection, Recommendation } from '../types'
-import { ResultFormatter } from '../result-formatter'
+// src/modules/ui-components/loading-states.tsx
+import React from 'react'
+import { motion } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
+import { cn } from '~lib/utils'
 
-interface AnalysisResultViewProps {
-  result: AnalysisResult
+interface LoadingProps {
+  size?: 'sm' | 'md' | 'lg'
+  text?: string
+  className?: string
 }
 
-export function AnalysisResultView({ result }: AnalysisResultViewProps) {
-  const formatted = ResultFormatter.formatForUI(result)
-
-  const handleExport = (format: 'pdf' | 'html' | 'markdown' | 'json') => {
-    const content = ResultFormatter.export(result, format)
-
-    // Create download
-    const blob = content instanceof Blob ? content : new Blob([content], {
-      type: format === 'json' ? 'application/json' : 'text/plain'
-    })
-
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `analysis-${result.id}.${format}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const handleCopy = () => {
-    const markdown = ResultFormatter.export(result, 'markdown')
-    navigator.clipboard.writeText(markdown as string)
+export function SpinnerLoading({ size = 'md', text, className }: LoadingProps) {
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-8 h-8',
+    lg: 'w-12 h-12'
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              {result.type.charAt(0).toUpperCase() + result.type.slice(1)} Analysis
-              {result.status === 'completed' && (
-                <Badge variant="outline" className="bg-green-50">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Completed
-                </Badge>
-              )}
-            </CardTitle>
-            {formatted.metadata && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Completed in {formatted.metadata.duration} • {formatted.metadata.model}
-              </p>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => handleExport('markdown')}>
-              <FileDown className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleCopy}>
-              <Copy className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline">
-              <Share className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="overview">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="recommendations">
-              Recommendations
-              {result.recommendations && (
-                <Badge variant="secondary" className="ml-2">
-                  {result.recommendations.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="export">Export</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            {formatted.summary && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm">{formatted.summary}</p>
-              </div>
-            )}
-
-            {formatted.metrics.primary.length > 0 && (
-              <div className="grid grid-cols-3 gap-4">
-                {formatted.metrics.primary.map((metric, index) => (
-                  <Card key={index}>
-                    <CardContent className="pt-6">
-                      <div className="text-2xl font-bold">
-                        {metric.format === 'percentage'
-                          ? `${(metric.value * 100).toFixed(1)}%`
-                          : metric.value
-                        }
-                        {metric.max && ` / ${metric.max}`}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{metric.label}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="details" className="space-y-4">
-            {formatted.sections.map((section) => (
-              <Card key={section.id} className={section.highlight ? 'border-primary' : ''}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{section.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {renderSectionContent(section)}
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-
-          <TabsContent value="recommendations" className="space-y-4">
-            {formatted.recommendations && formatted.recommendations.length > 0 ? (
-              formatted.recommendations.map((rec) => (
-                <Card key={rec.id} className={`border-l-4 ${
-                  rec.priority === 'high' ? 'border-l-red-500' :
-                  rec.priority === 'medium' ? 'border-l-yellow-500' :
-                  'border-l-green-500'
-                }`}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-start gap-2">
-                      <span className="text-lg">{rec.icon}</span>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{rec.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {rec.description}
-                        </p>
-                        {rec.impact && (
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Impact: {rec.impact}
-                          </p>
-                        )}
-                      </div>
-                      <Badge variant={
-                        rec.priority === 'high' ? 'destructive' :
-                        rec.priority === 'medium' ? 'default' :
-                        'secondary'
-                      }>
-                        {rec.priority}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                No recommendations available
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="export" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('pdf')}>
-                <CardContent className="pt-6 text-center">
-                  <FileDown className="h-8 w-8 mx-auto mb-2" />
-                  <p className="font-medium">Export as PDF</p>
-                  <p className="text-xs text-muted-foreground">Professional report format</p>
-                </CardContent>
-              </Card>
-              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('html')}>
-                <CardContent className="pt-6 text-center">
-                  <FileDown className="h-8 w-8 mx-auto mb-2" />
-                  <p className="font-medium">Export as HTML</p>
-                  <p className="text-xs text-muted-foreground">Web-ready format</p>
-                </CardContent>
-              </Card>
-              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('markdown')}>
-                <CardContent className="pt-6 text-center">
-                  <FileDown className="h-8 w-8 mx-auto mb-2" />
-                  <p className="font-medium">Export as Markdown</p>
-                  <p className="text-xs text-muted-foreground">Documentation format</p>
-                </CardContent>
-              </Card>
-              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('json')}>
-                <CardContent className="pt-6 text-center">
-                  <FileDown className="h-8 w-8 mx-auto mb-2" />
-                  <p className="font-medium">Export as JSON</p>
-                  <p className="text-xs text-muted-foreground">Raw data format</p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className={cn('flex flex-col items-center justify-center gap-2', className)}>
+      <Loader2 className={cn('animate-spin', sizeClasses[size])} />
+      {text && <p className="text-sm text-gray-500 dark:text-gray-400">{text}</p>}
+    </div>
   )
 }
 
-function renderSectionContent(section: AnalysisSection) {
-  if (typeof section.content === 'string') {
-    return <p className="whitespace-pre-wrap">{section.content}</p>
+export function DotsLoading({ size = 'md', text, className }: LoadingProps) {
+  const sizeClasses = {
+    sm: 'w-2 h-2',
+    md: 'w-3 h-3',
+    lg: 'w-4 h-4'
   }
 
-  const formatted = section.formatted
-
-  if (typeof formatted === 'object' && formatted.type === 'metrics') {
-    return (
-      <div className="grid grid-cols-2 gap-4">
-        {formatted.metrics.map((metric: any, index: number) => (
-          <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
-            <span className="text-sm font-medium">{metric.label}</span>
-            <span className="text-sm">
-              {metric.format === 'percentage'
-                ? `${(metric.value * 100).toFixed(1)}%`
-                : metric.value
-              }
-            </span>
-          </div>
+  return (
+    <div className={cn('flex flex-col items-center justify-center gap-2', className)}>
+      <div className="flex gap-1">
+        {[0, 1, 2].map((index) => (
+          <motion.div
+            key={index}
+            className={cn('bg-gray-400 dark:bg-gray-600 rounded-full', sizeClasses[size])}
+            animate={{
+              scale: [1, 1.2, 1],
+              opacity: [0.5, 1, 0.5]
+            }}
+            transition={{
+              duration: 1.2,
+              repeat: Infinity,
+              delay: index * 0.2
+            }}
+          />
         ))}
       </div>
-    )
-  }
-
-  if (typeof formatted === 'object' && formatted.type === 'list') {
-    return (
-      <ul className="space-y-1">
-        {formatted.items.map((item: string, index: number) => (
-          <li key={index} className="flex items-start gap-2">
-            <span className="text-muted-foreground">•</span>
-            <span className="text-sm">{item}</span>
-          </li>
-        ))}
-      </ul>
-    )
-  }
-
-  if (typeof formatted === 'object' && formatted.type === 'table') {
-    return (
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {formatted.headers.map((header: string, index: number) => (
-                <th key={index} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {formatted.rows.map((row: any, rowIndex: number) => (
-              <tr key={rowIndex}>
-                {Object.values(row).map((cell: any, cellIndex: number) => (
-                  <td key={cellIndex} className="px-4 py-2 text-sm">
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
-  return <div>{JSON.stringify(section.content)}</div>
+      {text && <p className="text-sm text-gray-500 dark:text-gray-400">{text}</p>}
+    </div>
+  )
 }
 
-// src/modules/analysis/components/index.ts
-export { AnalysisRunner } from './analysis-runner'
-export { AnalysisResultView } from './analysis-result-view'
-export { AnalysisHistory } from './analysis-history'
+export function PulseLoading({ size = 'md', text, className }: LoadingProps) {
+  const sizeClasses = {
+    sm: 'w-8 h-8',
+    md: 'w-12 h-12',
+    lg: 'w-16 h-16'
+  }
 
-// src/modules/analysis/components/analysis-history.tsx
-import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Badge } from '~components/ui/badge'
-import { Input } from '~components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '~components/ui/table'
-import { Search, Trash2, Eye, Clock } from 'lucide-react'
-import { useAnalysisContext } from '../analysis-provider'
-import { useState } from 'react'
-import { AnalysisResult } from '../types'
-
-export function AnalysisHistory() {
-  const { history, clearHistory } = useAnalysisContext()
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null)
-
-  const filteredHistory = history.filter(item =>
-    item.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    JSON.stringify(item.inputs).toLowerCase().includes(searchTerm.toLowerCase())
+  return (
+    <div className={cn('flex flex-col items-center justify-center gap-2', className)}>
+      <div className="relative">
+        <motion.div
+          className={cn('absolute inset-0 bg-blue-400 rounded-full opacity-75', sizeClasses[size])}
+          animate={{ scale: [0, 1.2], opacity: [0.75, 0] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
+        <div className={cn('bg-blue-500 rounded-full', sizeClasses[size])} />
+      </div>
+      {text && <p className="text-sm text-gray-500 dark:text-gray-400">{text}</p>}
+    </div>
   )
+}
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Badge variant="outline" className="bg-green-50">Completed</Badge>
-      case 'failed':
-        return <Badge variant="destructive">Failed</Badge>
-      case 'processing':
-        return <Badge variant="default">Processing</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
+export function SkeletonLoading({
+  lines = 3,
+  className
+}: {
+  lines?: number
+  className?: string
+}) {
+  return (
+    <div className={cn('space-y-3', className)}>
+      {Array.from({ length: lines }).map((_, index) => (
+        <div
+          key={index}
+          className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
+          style={{ width: `${Math.random() * 40 + 60}%` }}
+        />
+      ))}
+    </div>
+  )
+}
+
+export function ProgressLoading({
+  progress,
+  text,
+  className
+}: {
+  progress: number
+  text?: string
+  className?: string
+}) {
+  return (
+    <div className={cn('w-full space-y-2', className)}>
+      <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <motion.div
+          className="h-full bg-blue-500"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.3 }}
+        />
+      </div>
+      <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+        {text && <span>{text}</span>}
+        <span>{Math.round(progress)}%</span>
+      </div>
+    </div>
+  )
+}
+
+// src/modules/ui-components/notifications.tsx
+import React, { createContext, useContext, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X, Info, CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
+import { NotificationConfig } from './types'
+import { cn } from '~lib/utils'
+
+interface NotificationContextValue {
+  notify: (config: NotificationConfig) => void
+  dismiss: (id: string) => void
+  dismissAll: () => void
+}
+
+const NotificationContext = createContext<NotificationContextValue | null>(null)
+
+export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const [notifications, setNotifications] = useState<NotificationConfig[]>([])
+
+  const notify = useCallback((config: NotificationConfig) => {
+    const id = config.id || Date.now().toString()
+    const notification = { ...config, id }
+
+    setNotifications(prev => [...prev, notification])
+
+    if (config.duration !== 0) {
+      setTimeout(() => {
+        dismiss(id)
+      }, config.duration || 5000)
     }
-  }
+  }, [])
 
-  const formatDuration = (duration?: number) => {
-    if (!duration) return '-'
-    return `${(duration / 1000).toFixed(2)}s`
-  }
+  const dismiss = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }, [])
+
+  const dismissAll = useCallback(() => {
+    setNotifications([])
+  }, [])
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Analysis History</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => confirm('Clear all history?') && clearHistory()}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Clear All
-          </Button>
+    <NotificationContext.Provider value={{ notify, dismiss, dismissAll }}>
+      {children}
+      <NotificationContainer notifications={notifications} onDismiss={dismiss} />
+    </NotificationContext.Provider>
+  )
+}
+
+export function useNotifications() {
+  const context = useContext(NotificationContext)
+  if (!context) {
+    throw new Error('useNotifications must be used within NotificationProvider')
+  }
+  return context
+}
+
+interface NotificationContainerProps {
+  notifications: NotificationConfig[]
+  onDismiss: (id: string) => void
+}
+
+function NotificationContainer({ notifications, onDismiss }: NotificationContainerProps) {
+  const positions = {
+    'top-left': 'top-4 left-4',
+    'top-right': 'top-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'bottom-right': 'bottom-4 right-4',
+    'top-center': 'top-4 left-1/2 -translate-x-1/2',
+    'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2'
+  }
+
+  // Group notifications by position
+  const groupedNotifications = notifications.reduce((acc, notification) => {
+    const position = notification.position || 'top-right'
+    if (!acc[position]) acc[position] = []
+    acc[position].push(notification)
+    return acc
+  }, {} as Record<string, NotificationConfig[]>)
+
+  return createPortal(
+    <>
+      {Object.entries(groupedNotifications).map(([position, items]) => (
+        <div
+          key={position}
+          className={cn('fixed z-[10001]', positions[position as keyof typeof positions])}
+        >
+          <AnimatePresence>
+            {items.map((notification) => (
+              <Notification
+                key={notification.id}
+                notification={notification}
+                onDismiss={() => onDismiss(notification.id!)}
+              />
+            ))}
+          </AnimatePresence>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search history..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+      ))}
+    </>,
+    document.body
+  )
+}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredHistory.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">
-                    {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {new Date(item.metadata.startedAt).toLocaleString()}
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatDuration(item.metadata.duration)}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setSelectedResult(item)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+interface NotificationProps {
+  notification: NotificationConfig
+  onDismiss: () => void
+}
 
-          {filteredHistory.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No analysis history found
-            </div>
+function Notification({ notification, onDismiss }: NotificationProps) {
+  const icons = {
+    info: <Info className="w-5 h-5 text-blue-500" />,
+    success: <CheckCircle className="w-5 h-5 text-green-500" />,
+    warning: <AlertTriangle className="w-5 h-5 text-yellow-500" />,
+    error: <XCircle className="w-5 h-5 text-red-500" />
+  }
+
+  const bgColors = {
+    info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+    success: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
+    warning: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
+    error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+  }
+
+  const type = notification.type || 'info'
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+      className={cn(
+        'mb-4 p-4 rounded-lg shadow-lg border',
+        'bg-white dark:bg-gray-800',
+        bgColors[type],
+        'min-w-[300px] max-w-[500px]'
+      )}
+    >
+      <div className="flex items-start gap-3">
+        {notification.icon || icons[type]}
+
+        <div className="flex-1">
+          {notification.title && (
+            <h4 className="font-semibold mb-1">{notification.title}</h4>
+          )}
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {notification.message}
+          </p>
+
+          {notification.action && (
+            <button
+              onClick={notification.action.onClick}
+              className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {notification.action.label}
+            </button>
           )}
         </div>
-      </CardContent>
 
-      {selectedResult && (
-        <AnalysisResultView result={selectedResult} />
-      )}
-    </Card>
+        {notification.closable !== false && (
+          <button
+            onClick={onDismiss}
+            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </motion.div>
   )
+}
+
+// Simple toast-style notifications
+export function toast(message: string, type: NotificationConfig['type'] = 'info') {
+  // This is a standalone function that requires NotificationProvider to be set up
+  const event = new CustomEvent('extension-notification', {
+    detail: { message, type }
+  })
+  window.dispatchEvent(event)
+}
+
+// Notification listener component
+export function NotificationListener() {
+  const { notify } = useNotifications()
+
+  React.useEffect(() => {
+    const handler = (event: CustomEvent) => {
+      notify({
+        message: event.detail.message,
+        type: event.detail.type,
+        position: 'bottom-center'
+      })
+    }
+
+    window.addEventListener('extension-notification' as any, handler)
+    return () => window.removeEventListener('extension-notification' as any, handler)
+  }, [notify])
+
+  return null
+}
+
+// src/modules/ui-components/providers.tsx
+import React from 'react'
+import { NotificationProvider, NotificationListener } from './notifications'
+
+export function ExtensionUIProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <NotificationProvider>
+      <NotificationListener />
+      {children}
+    </NotificationProvider>
+  )
+}
+
+// src/modules/ui-components/hooks.ts
+export { useFloatingIcon } from './floating-icon'
+export { useContextMenu } from './context-menu'
+export { useSidebar } from './sidebar'
+export { useNotifications } from './notifications'
+
+// Re-export common hook
+export function useExtensionUI() {
+  const notifications = useNotifications()
+  const contextMenu = useContextMenu()
+  const sidebar = useSidebar()
+
+  return {
+    notifications,
+    contextMenu,
+    sidebar
+  }
 }
