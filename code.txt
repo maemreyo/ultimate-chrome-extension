@@ -1,1140 +1,2352 @@
-// src/modules/storage/components/session-viewer.tsx
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Badge } from '~components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Progress } from '~components/ui/progress'
+// src/modules/analysis/index.ts
+export * from './types'
+export * from './analysis-engine'
+export * from './analysis-provider'
+export * from './hooks'
+export * from './components'
+export { analysisEngine } from './analysis-engine'
+
+// src/modules/analysis/types.ts
+export interface AnalysisType {
+  id: string
+  name: string
+  description: string
+  icon?: string
+  category: 'content' | 'sentiment' | 'seo' | 'readability' | 'fact-check' | 'bias' | 'custom'
+  requiredInputs: AnalysisInput[]
+  outputFormat: AnalysisOutput
+  estimatedTime?: number // in seconds
+  aiRequired: boolean
+}
+
+export interface AnalysisInput {
+  name: string
+  type: 'text' | 'url' | 'html' | 'image' | 'document'
+  required: boolean
+  maxLength?: number
+  description?: string
+}
+
+export interface AnalysisOutput {
+  type: 'structured' | 'markdown' | 'html' | 'json'
+  schema?: Record<string, any>
+  sections?: string[]
+}
+
+export interface AnalysisRequest {
+  type: string
+  inputs: Record<string, any>
+  options?: AnalysisOptions
+}
+
+export interface AnalysisOptions {
+  language?: string
+  depth?: 'quick' | 'standard' | 'detailed'
+  includeRecommendations?: boolean
+  includeSources?: boolean
+  customPrompt?: string
+}
+
+export interface AnalysisResult {
+  id: string
+  type: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  inputs: Record<string, any>
+  output?: any
+  metadata: {
+    startedAt: Date
+    completedAt?: Date
+    duration?: number
+    tokensUsed?: number
+    model?: string
+    error?: string
+  }
+  sections?: AnalysisSection[]
+  recommendations?: Recommendation[]
+  sources?: Source[]
+}
+
+export interface AnalysisSection {
+  id: string
+  title: string
+  content: string | any
+  type: 'text' | 'chart' | 'table' | 'list' | 'metric'
+  order: number
+  highlight?: boolean
+}
+
+export interface Recommendation {
+  id: string
+  title: string
+  description: string
+  priority: 'low' | 'medium' | 'high'
+  category: string
+  actionable: boolean
+  impact?: string
+}
+
+export interface Source {
+  title: string
+  url?: string
+  author?: string
+  date?: Date
+  relevance: number
+}
+
+export interface PromptTemplate {
+  id: string
+  name: string
+  description: string
+  template: string
+  variables: PromptVariable[]
+  category: string
+  examples?: Example[]
+}
+
+export interface PromptVariable {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object'
+  required: boolean
+  default?: any
+  description?: string
+  validation?: (value: any) => boolean
+}
+
+export interface Example {
+  inputs: Record<string, any>
+  output: string
+}
+
+// src/modules/analysis/prompt-templates.ts
+import { PromptTemplate } from './types'
+
+export const promptTemplates: Record<string, PromptTemplate> = {
+  contentAnalysis: {
+    id: 'content-analysis',
+    name: 'Content Analysis',
+    description: 'Comprehensive analysis of text content',
+    category: 'content',
+    template: `Analyze the following content and provide a comprehensive analysis:
+
+Content: {{content}}
+
+Please analyze the following aspects:
+1. Main Topic and Theme
+2. Key Points and Arguments
+3. Writing Style and Tone
+4. Target Audience
+5. Strengths and Weaknesses
+6. Overall Quality Score (1-10)
+
+{{#if includeRecommendations}}
+Also provide specific recommendations for improvement.
+{{/if}}
+
+Format your response as a structured analysis with clear sections.`,
+    variables: [
+      {
+        name: 'content',
+        type: 'string',
+        required: true,
+        description: 'The content to analyze'
+      },
+      {
+        name: 'includeRecommendations',
+        type: 'boolean',
+        required: false,
+        default: true,
+        description: 'Whether to include improvement recommendations'
+      }
+    ]
+  },
+
+  sentimentAnalysis: {
+    id: 'sentiment-analysis',
+    name: 'Sentiment Analysis',
+    description: 'Analyze emotional tone and sentiment',
+    category: 'sentiment',
+    template: `Perform a detailed sentiment analysis on the following text:
+
+Text: {{text}}
+
+Analyze:
+1. Overall Sentiment (Positive/Negative/Neutral) with confidence score
+2. Emotional Tone (Professional/Casual/Formal/Informal/etc.)
+3. Detected Emotions (Joy, Anger, Sadness, Fear, Surprise, etc.) with intensities
+4. Sentiment Progression (if text is long enough)
+5. Key Phrases Contributing to Sentiment
+
+{{#if contextualFactors}}
+Consider these contextual factors: {{contextualFactors}}
+{{/if}}
+
+Provide specific examples from the text to support your analysis.`,
+    variables: [
+      {
+        name: 'text',
+        type: 'string',
+        required: true,
+        description: 'Text to analyze for sentiment'
+      },
+      {
+        name: 'contextualFactors',
+        type: 'string',
+        required: false,
+        description: 'Additional context to consider'
+      }
+    ]
+  },
+
+  seoAnalysis: {
+    id: 'seo-analysis',
+    name: 'SEO Analysis',
+    description: 'Search engine optimization analysis',
+    category: 'seo',
+    template: `Perform an SEO analysis for the following content:
+
+URL: {{url}}
+Title: {{title}}
+Meta Description: {{metaDescription}}
+Content: {{content}}
+
+Analyze:
+1. Title Tag Optimization (length, keywords, appeal)
+2. Meta Description Quality
+3. Keyword Usage and Density
+4. Content Structure (headings, paragraphs)
+5. Readability Score
+6. Internal/External Link Analysis
+7. Image Alt Text Usage
+8. Schema Markup Recommendations
+
+Target Keywords: {{#if keywords}}{{keywords}}{{else}}Identify from content{{/if}}
+
+Provide specific recommendations with priority levels.`,
+    variables: [
+      {
+        name: 'url',
+        type: 'string',
+        required: false,
+        description: 'Page URL'
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: true,
+        description: 'Page title'
+      },
+      {
+        name: 'metaDescription',
+        type: 'string',
+        required: false,
+        description: 'Meta description'
+      },
+      {
+        name: 'content',
+        type: 'string',
+        required: true,
+        description: 'Page content'
+      },
+      {
+        name: 'keywords',
+        type: 'array',
+        required: false,
+        description: 'Target keywords'
+      }
+    ]
+  },
+
+  readabilityAnalysis: {
+    id: 'readability-analysis',
+    name: 'Readability Analysis',
+    description: 'Assess content readability and accessibility',
+    category: 'readability',
+    template: `Analyze the readability of the following text:
+
+Text: {{text}}
+
+Provide analysis on:
+1. Reading Level (Grade level)
+2. Sentence Complexity
+   - Average sentence length
+   - Complex sentence ratio
+3. Vocabulary Difficulty
+   - Common vs. uncommon words
+   - Technical jargon usage
+4. Paragraph Structure
+5. Clarity and Coherence
+6. Accessibility Issues
+
+Target Audience: {{#if targetAudience}}{{targetAudience}}{{else}}General public{{/if}}
+
+Suggest specific improvements to enhance readability.`,
+    variables: [
+      {
+        name: 'text',
+        type: 'string',
+        required: true,
+        description: 'Text to analyze'
+      },
+      {
+        name: 'targetAudience',
+        type: 'string',
+        required: false,
+        description: 'Intended audience'
+      }
+    ]
+  },
+
+  factCheckAnalysis: {
+    id: 'fact-check-analysis',
+    name: 'Fact Check Analysis',
+    description: 'Identify and verify factual claims',
+    category: 'fact-check',
+    template: `Identify and analyze factual claims in the following content:
+
+Content: {{content}}
+
+For each claim:
+1. Extract the specific claim
+2. Categorize claim type (statistical, historical, scientific, etc.)
+3. Assess verifiability (can be fact-checked vs. opinion)
+4. Identify what evidence would be needed to verify
+5. Flag potential red flags or suspicious claims
+
+{{#if checkSources}}
+Also evaluate the credibility of any cited sources.
+{{/if}}
+
+Focus on claims that are:
+- Specific and measurable
+- Potentially misleading if false
+- Central to the argument
+
+Do not attempt to verify the claims, only identify and categorize them.`,
+    variables: [
+      {
+        name: 'content',
+        type: 'string',
+        required: true,
+        description: 'Content to analyze for claims'
+      },
+      {
+        name: 'checkSources',
+        type: 'boolean',
+        required: false,
+        default: true,
+        description: 'Whether to evaluate source credibility'
+      }
+    ]
+  },
+
+  biasAnalysis: {
+    id: 'bias-analysis',
+    name: 'Bias Analysis',
+    description: 'Detect potential biases in content',
+    category: 'bias',
+    template: `Analyze the following content for potential biases:
+
+Content: {{content}}
+{{#if author}}Author: {{author}}{{/if}}
+{{#if source}}Source: {{source}}{{/if}}
+
+Examine for:
+1. Political Bias (left/center/right leaning)
+2. Confirmation Bias Indicators
+3. Selection Bias in Examples/Data
+4. Language Bias (loaded words, framing)
+5. Cultural or Regional Bias
+6. Gender, Race, or Other Demographic Bias
+7. Commercial or Financial Bias
+
+For each detected bias:
+- Provide specific examples
+- Rate severity (minor/moderate/significant)
+- Suggest neutral alternatives
+
+Note: Aim for objective analysis without introducing your own biases.`,
+    variables: [
+      {
+        name: 'content',
+        type: 'string',
+        required: true,
+        description: 'Content to analyze'
+      },
+      {
+        name: 'author',
+        type: 'string',
+        required: false,
+        description: 'Content author'
+      },
+      {
+        name: 'source',
+        type: 'string',
+        required: false,
+        description: 'Content source'
+      }
+    ]
+  },
+
+  competitorAnalysis: {
+    id: 'competitor-analysis',
+    name: 'Competitor Content Analysis',
+    description: 'Compare content against competitors',
+    category: 'content',
+    template: `Compare and analyze the following content pieces:
+
+Your Content:
+{{yourContent}}
+
+Competitor Content:
+{{competitorContent}}
+
+Analyze:
+1. Content Depth and Coverage
+2. Unique Value Propositions
+3. Writing Quality and Style
+4. SEO Optimization Comparison
+5. Visual and Media Usage
+6. Call-to-Action Effectiveness
+7. Audience Engagement Potential
+
+Provide:
+- Strengths of each piece
+- Areas where competitor excels
+- Opportunities for improvement
+- Specific recommendations to outperform`,
+    variables: [
+      {
+        name: 'yourContent',
+        type: 'string',
+        required: true,
+        description: 'Your content'
+      },
+      {
+        name: 'competitorContent',
+        type: 'string',
+        required: true,
+        description: 'Competitor content'
+      }
+    ]
+  },
+
+  customAnalysis: {
+    id: 'custom-analysis',
+    name: 'Custom Analysis',
+    description: 'User-defined analysis',
+    category: 'custom',
+    template: `{{customPrompt}}
+
+Input: {{input}}
+
+{{#if additionalInstructions}}
+Additional Instructions: {{additionalInstructions}}
+{{/if}}`,
+    variables: [
+      {
+        name: 'customPrompt',
+        type: 'string',
+        required: true,
+        description: 'Custom analysis prompt'
+      },
+      {
+        name: 'input',
+        type: 'string',
+        required: true,
+        description: 'Input to analyze'
+      },
+      {
+        name: 'additionalInstructions',
+        type: 'string',
+        required: false,
+        description: 'Additional instructions'
+      }
+    ]
+  }
+}
+
+// Helper function to compile templates
+export function compileTemplate(template: string, variables: Record<string, any>): string {
+  let compiled = template
+
+  // Handle conditional blocks {{#if variable}}...{{/if}}
+  compiled = compiled.replace(/\{\{#if\s+(\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (match, varName, content) => {
+    return variables[varName] ? content : ''
+  })
+
+  // Handle variable substitution {{variable}}
+  compiled = compiled.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    const value = variables[varName]
+    if (Array.isArray(value)) {
+      return value.join(', ')
+    }
+    return value?.toString() || ''
+  })
+
+  return compiled.trim()
+}
+
+// src/modules/analysis/analysis-types.ts
+import { AnalysisType } from './types'
+
+export const analysisTypes: Record<string, AnalysisType> = {
+  content: {
+    id: 'content',
+    name: 'Content Analysis',
+    description: 'Comprehensive analysis of text content including quality, structure, and effectiveness',
+    icon: '📝',
+    category: 'content',
+    requiredInputs: [
+      {
+        name: 'content',
+        type: 'text',
+        required: true,
+        maxLength: 50000,
+        description: 'The content to analyze'
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      sections: ['overview', 'key-points', 'quality-metrics', 'recommendations']
+    },
+    estimatedTime: 30,
+    aiRequired: true
+  },
+
+  sentiment: {
+    id: 'sentiment',
+    name: 'Sentiment Analysis',
+    description: 'Analyze emotional tone, sentiment polarity, and mood',
+    icon: '😊',
+    category: 'sentiment',
+    requiredInputs: [
+      {
+        name: 'text',
+        type: 'text',
+        required: true,
+        maxLength: 10000
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      schema: {
+        overall: 'string',
+        score: 'number',
+        emotions: 'object',
+        keywords: 'array'
+      }
+    },
+    estimatedTime: 10,
+    aiRequired: true
+  },
+
+  seo: {
+    id: 'seo',
+    name: 'SEO Analysis',
+    description: 'Search engine optimization analysis and recommendations',
+    icon: '🔍',
+    category: 'seo',
+    requiredInputs: [
+      {
+        name: 'content',
+        type: 'html',
+        required: true
+      },
+      {
+        name: 'url',
+        type: 'url',
+        required: false
+      },
+      {
+        name: 'keywords',
+        type: 'text',
+        required: false,
+        description: 'Target keywords (comma separated)'
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      sections: ['score', 'issues', 'recommendations', 'keyword-analysis']
+    },
+    estimatedTime: 45,
+    aiRequired: true
+  },
+
+  readability: {
+    id: 'readability',
+    name: 'Readability Analysis',
+    description: 'Assess reading difficulty and accessibility',
+    icon: '📖',
+    category: 'readability',
+    requiredInputs: [
+      {
+        name: 'text',
+        type: 'text',
+        required: true
+      },
+      {
+        name: 'targetAudience',
+        type: 'text',
+        required: false,
+        description: 'Target audience (e.g., "general public", "experts")'
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      sections: ['score', 'metrics', 'issues', 'suggestions']
+    },
+    estimatedTime: 15,
+    aiRequired: true
+  },
+
+  factCheck: {
+    id: 'fact-check',
+    name: 'Fact Check Analysis',
+    description: 'Identify factual claims for verification',
+    icon: '✓',
+    category: 'fact-check',
+    requiredInputs: [
+      {
+        name: 'content',
+        type: 'text',
+        required: true
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      sections: ['claims', 'sources', 'red-flags']
+    },
+    estimatedTime: 60,
+    aiRequired: true
+  },
+
+  bias: {
+    id: 'bias',
+    name: 'Bias Detection',
+    description: 'Detect various types of bias in content',
+    icon: '⚖️',
+    category: 'bias',
+    requiredInputs: [
+      {
+        name: 'content',
+        type: 'text',
+        required: true
+      },
+      {
+        name: 'context',
+        type: 'text',
+        required: false,
+        description: 'Additional context about the content'
+      }
+    ],
+    outputFormat: {
+      type: 'structured',
+      sections: ['bias-types', 'examples', 'severity', 'recommendations']
+    },
+    estimatedTime: 40,
+    aiRequired: true
+  },
+
+  summary: {
+    id: 'summary',
+    name: 'Smart Summary',
+    description: 'Generate intelligent summaries with key insights',
+    icon: '📋',
+    category: 'content',
+    requiredInputs: [
+      {
+        name: 'content',
+        type: 'text',
+        required: true
+      },
+      {
+        name: 'length',
+        type: 'text',
+        required: false,
+        description: 'Desired summary length (short/medium/long)'
+      }
+    ],
+    outputFormat: {
+      type: 'markdown',
+      sections: ['summary', 'key-points', 'insights']
+    },
+    estimatedTime: 20,
+    aiRequired: true
+  }
+}
+
+// src/modules/analysis/response-parser.ts
+import { AnalysisResult, AnalysisSection, Recommendation } from './types'
+
+export class ResponseParser {
+  /**
+   * Parse AI response into structured analysis result
+   */
+  static parseAnalysisResponse(
+    response: string,
+    analysisType: string,
+    format: 'structured' | 'markdown' | 'html' | 'json'
+  ): Partial<AnalysisResult> {
+    switch (format) {
+      case 'structured':
+        return this.parseStructuredResponse(response, analysisType)
+      case 'markdown':
+        return this.parseMarkdownResponse(response)
+      case 'json':
+        return this.parseJsonResponse(response)
+      case 'html':
+        return this.parseHtmlResponse(response)
+      default:
+        return { output: response }
+    }
+  }
+
+  private static parseStructuredResponse(response: string, analysisType: string): Partial<AnalysisResult> {
+    const sections: AnalysisSection[] = []
+    const recommendations: Recommendation[] = []
+
+    // Split response into sections based on headers
+    const sectionRegex = /^#+\s+(.+)$/gm
+    const parts = response.split(sectionRegex)
+
+    for (let i = 1; i < parts.length; i += 2) {
+      const title = parts[i].trim()
+      const content = parts[i + 1]?.trim() || ''
+
+      // Check if this is a recommendations section
+      if (title.toLowerCase().includes('recommendation')) {
+        recommendations.push(...this.extractRecommendations(content))
+      } else {
+        sections.push({
+          id: `section-${i}`,
+          title,
+          content: this.parseContent(content, analysisType),
+          type: this.detectSectionType(content),
+          order: Math.floor(i / 2)
+        })
+      }
+    }
+
+    return { sections, recommendations }
+  }
+
+  private static parseContent(content: string, analysisType: string): any {
+    // Check for specific patterns
+
+    // Metrics pattern (e.g., "Score: 8/10")
+    const metricsRegex = /^(.+?):\s*(\d+(?:\.\d+)?)\s*(?:\/\s*(\d+))?$/gm
+    const metrics: Record<string, any> = {}
+    let match
+
+    while ((match = metricsRegex.exec(content)) !== null) {
+      const [, label, value, max] = match
+      metrics[label.toLowerCase().replace(/\s+/g, '_')] = {
+        value: parseFloat(value),
+        max: max ? parseFloat(max) : undefined
+      }
+    }
+
+    if (Object.keys(metrics).length > 0) {
+      return { type: 'metrics', data: metrics, text: content }
+    }
+
+    // List pattern
+    const listRegex = /^[\-\*\d+\.]\s+(.+)$/gm
+    const listItems: string[] = []
+
+    while ((match = listRegex.exec(content)) !== null) {
+      listItems.push(match[1])
+    }
+
+    if (listItems.length > 0) {
+      return { type: 'list', items: listItems }
+    }
+
+    // Table pattern (simple markdown tables)
+    if (content.includes('|') && content.includes('---')) {
+      return this.parseTable(content)
+    }
+
+    // Default: return as text
+    return content
+  }
+
+  private static detectSectionType(content: string): 'text' | 'chart' | 'table' | 'list' | 'metric' {
+    if (typeof content === 'object') {
+      if (content.type === 'metrics') return 'metric'
+      if (content.type === 'list') return 'list'
+      if (content.type === 'table') return 'table'
+    }
+
+    // Check content patterns
+    if (content.includes('|') && content.includes('---')) return 'table'
+    if (/^[\-\*\d+\.]\s+/m.test(content)) return 'list'
+    if (/^\w+:\s*\d+/m.test(content)) return 'metric'
+
+    return 'text'
+  }
+
+  private static extractRecommendations(content: string): Recommendation[] {
+    const recommendations: Recommendation[] = []
+
+    // Split by line breaks or list items
+    const lines = content.split(/\n+/)
+
+    lines.forEach((line, index) => {
+      const trimmed = line.replace(/^[\-\*\d+\.]\s+/, '').trim()
+      if (!trimmed) return
+
+      // Try to extract priority from the line
+      let priority: 'low' | 'medium' | 'high' = 'medium'
+      let title = trimmed
+      let description = ''
+
+      // Check for priority indicators
+      if (/high\s*priority|critical|urgent/i.test(trimmed)) {
+        priority = 'high'
+      } else if (/low\s*priority|minor|optional/i.test(trimmed)) {
+        priority = 'low'
+      }
+
+      // Split title and description if there's a colon
+      const colonIndex = trimmed.indexOf(':')
+      if (colonIndex > 0) {
+        title = trimmed.substring(0, colonIndex).trim()
+        description = trimmed.substring(colonIndex + 1).trim()
+      }
+
+      recommendations.push({
+        id: `rec-${index}`,
+        title,
+        description,
+        priority,
+        category: 'general',
+        actionable: true
+      })
+    })
+
+    return recommendations
+  }
+
+  private static parseTable(content: string): any {
+    const lines = content.trim().split('\n')
+    const headers: string[] = []
+    const rows: any[] = []
+
+    lines.forEach((line, index) => {
+      if (line.includes('---')) return // Skip separator
+
+      const cells = line.split('|').map(cell => cell.trim()).filter(cell => cell)
+
+      if (index === 0) {
+        headers.push(...cells)
+      } else {
+        const row: Record<string, string> = {}
+        cells.forEach((cell, i) => {
+          row[headers[i] || `col${i}`] = cell
+        })
+        rows.push(row)
+      }
+    })
+
+    return { type: 'table', headers, rows }
+  }
+
+  private static parseMarkdownResponse(response: string): Partial<AnalysisResult> {
+    return {
+      output: response,
+      sections: [{
+        id: 'markdown-content',
+        title: 'Analysis',
+        content: response,
+        type: 'text',
+        order: 0
+      }]
+    }
+  }
+
+  private static parseJsonResponse(response: string): Partial<AnalysisResult> {
+    try {
+      const parsed = JSON.parse(response)
+      return { output: parsed }
+    } catch (error) {
+      console.error('Failed to parse JSON response:', error)
+      return { output: response }
+    }
+  }
+
+  private static parseHtmlResponse(response: string): Partial<AnalysisResult> {
+    // Simple HTML parsing - in production, use a proper HTML parser
+    const div = document.createElement('div')
+    div.innerHTML = response
+
+    const sections: AnalysisSection[] = []
+
+    // Extract sections from headings
+    const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6')
+
+    headings.forEach((heading, index) => {
+      const title = heading.textContent || ''
+      const content = this.getContentUntilNextHeading(heading)
+
+      sections.push({
+        id: `section-${index}`,
+        title,
+        content,
+        type: 'text',
+        order: index
+      })
+    })
+
+    return { output: response, sections }
+  }
+
+  private static getContentUntilNextHeading(element: Element): string {
+    let content = ''
+    let sibling = element.nextElementSibling
+
+    while (sibling && !sibling.matches('h1, h2, h3, h4, h5, h6')) {
+      content += sibling.textContent + '\n'
+      sibling = sibling.nextElementSibling
+    }
+
+    return content.trim()
+  }
+
+  /**
+   * Extract key metrics from analysis
+   */
+  static extractMetrics(result: AnalysisResult): Record<string, any> {
+    const metrics: Record<string, any> = {}
+
+    result.sections?.forEach(section => {
+      if (section.type === 'metric' && typeof section.content === 'object') {
+        Object.assign(metrics, section.content.data)
+      }
+    })
+
+    return metrics
+  }
+
+  /**
+   * Extract all recommendations
+   */
+  static extractRecommendations(result: AnalysisResult): Recommendation[] {
+    return result.recommendations || []
+  }
+}
+
+// src/modules/analysis/result-formatter.ts
+import { AnalysisResult, AnalysisSection, Recommendation } from './types'
+
+export class ResultFormatter {
+  /**
+   * Format analysis result for UI display
+   */
+  static formatForUI(result: AnalysisResult, options: FormatterOptions = {}): FormattedResult {
+    const {
+      includeMetadata = true,
+      includeRecommendations = true,
+      includeSources = true,
+      highlightSections = [],
+      theme = 'light'
+    } = options
+
+    return {
+      id: result.id,
+      type: result.type,
+      status: result.status,
+      summary: this.generateSummary(result),
+      sections: this.formatSections(result.sections || [], highlightSections),
+      metrics: this.formatMetrics(result),
+      recommendations: includeRecommendations ? this.formatRecommendations(result.recommendations || []) : undefined,
+      sources: includeSources ? result.sources : undefined,
+      metadata: includeMetadata ? this.formatMetadata(result.metadata) : undefined,
+      theme
+    }
+  }
+
+  private static generateSummary(result: AnalysisResult): string {
+    // Extract key points from sections
+    const keyPoints: string[] = []
+
+    result.sections?.forEach(section => {
+      if (section.title.toLowerCase().includes('overview') ||
+          section.title.toLowerCase().includes('summary')) {
+        if (typeof section.content === 'string') {
+          keyPoints.push(section.content.substring(0, 200) + '...')
+        }
+      }
+    })
+
+    if (keyPoints.length === 0 && result.sections && result.sections.length > 0) {
+      const firstSection = result.sections[0]
+      if (typeof firstSection.content === 'string') {
+        keyPoints.push(firstSection.content.substring(0, 200) + '...')
+      }
+    }
+
+    return keyPoints.join(' ')
+  }
+
+  private static formatSections(sections: AnalysisSection[], highlightIds: string[]): FormattedSection[] {
+    return sections.map(section => ({
+      ...section,
+      highlight: highlightIds.includes(section.id) || section.highlight,
+      formatted: this.formatSectionContent(section)
+    }))
+  }
+
+  private static formatSectionContent(section: AnalysisSection): string | React.ReactNode {
+    switch (section.type) {
+      case 'metric':
+        return this.formatMetricContent(section.content)
+      case 'list':
+        return this.formatListContent(section.content)
+      case 'table':
+        return this.formatTableContent(section.content)
+      case 'chart':
+        return this.formatChartContent(section.content)
+      default:
+        return section.content
+    }
+  }
+
+  private static formatMetricContent(content: any): React.ReactNode {
+    if (typeof content !== 'object' || !content.data) return content
+
+    // Return a format that can be rendered as metric cards
+    return {
+      type: 'metrics',
+      metrics: Object.entries(content.data).map(([key, value]: [string, any]) => ({
+        label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        value: value.value,
+        max: value.max,
+        unit: value.unit,
+        format: value.value < 1 ? 'percentage' : 'number'
+      }))
+    }
+  }
+
+  private static formatListContent(content: any): React.ReactNode {
+    if (typeof content !== 'object' || !content.items) return content
+
+    return {
+      type: 'list',
+      items: content.items
+    }
+  }
+
+  private static formatTableContent(content: any): React.ReactNode {
+    if (typeof content !== 'object' || !content.headers) return content
+
+    return {
+      type: 'table',
+      headers: content.headers,
+      rows: content.rows
+    }
+  }
+
+  private static formatChartContent(content: any): React.ReactNode {
+    // Format for chart rendering
+    return {
+      type: 'chart',
+      data: content
+    }
+  }
+
+  private static formatMetrics(result: AnalysisResult): FormattedMetrics {
+    const metrics: FormattedMetrics = {
+      primary: [],
+      secondary: []
+    }
+
+    result.sections?.forEach(section => {
+      if (section.type === 'metric') {
+        const formatted = this.formatMetricContent(section.content)
+        if (typeof formatted === 'object' && formatted.type === 'metrics') {
+          metrics.primary.push(...formatted.metrics.slice(0, 3))
+          metrics.secondary.push(...formatted.metrics.slice(3))
+        }
+      }
+    })
+
+    return metrics
+  }
+
+  private static formatRecommendations(recommendations: Recommendation[]): FormattedRecommendation[] {
+    // Group by priority
+    const grouped = {
+      high: recommendations.filter(r => r.priority === 'high'),
+      medium: recommendations.filter(r => r.priority === 'medium'),
+      low: recommendations.filter(r => r.priority === 'low')
+    }
+
+    // Sort and format
+    return [
+      ...grouped.high,
+      ...grouped.medium,
+      ...grouped.low
+    ].map(rec => ({
+      ...rec,
+      icon: this.getRecommendationIcon(rec),
+      color: this.getRecommendationColor(rec.priority)
+    }))
+  }
+
+  private static getRecommendationIcon(rec: Recommendation): string {
+    if (rec.priority === 'high') return '🔴'
+    if (rec.priority === 'medium') return '🟡'
+    return '🟢'
+  }
+
+  private static getRecommendationColor(priority: string): string {
+    switch (priority) {
+      case 'high': return 'red'
+      case 'medium': return 'yellow'
+      case 'low': return 'green'
+      default: return 'gray'
+    }
+  }
+
+  private static formatMetadata(metadata: AnalysisResult['metadata']): FormattedMetadata {
+    return {
+      duration: metadata.duration ? `${(metadata.duration / 1000).toFixed(2)}s` : undefined,
+      tokensUsed: metadata.tokensUsed?.toLocaleString(),
+      model: metadata.model,
+      completedAt: metadata.completedAt ? new Date(metadata.completedAt).toLocaleString() : undefined
+    }
+  }
+
+  /**
+   * Export analysis result in various formats
+   */
+  static export(result: AnalysisResult, format: 'pdf' | 'html' | 'markdown' | 'json'): string | Blob {
+    switch (format) {
+      case 'markdown':
+        return this.exportAsMarkdown(result)
+      case 'html':
+        return this.exportAsHtml(result)
+      case 'json':
+        return JSON.stringify(result, null, 2)
+      case 'pdf':
+        // Would require additional library like jsPDF
+        return new Blob([this.exportAsHtml(result)], { type: 'application/pdf' })
+      default:
+        return JSON.stringify(result)
+    }
+  }
+
+  private static exportAsMarkdown(result: AnalysisResult): string {
+    let markdown = `# ${result.type} Analysis\n\n`
+
+    markdown += `**Status:** ${result.status}\n`
+    markdown += `**Date:** ${new Date(result.metadata.startedAt).toLocaleString()}\n\n`
+
+    result.sections?.forEach(section => {
+      markdown += `## ${section.title}\n\n`
+
+      if (typeof section.content === 'string') {
+        markdown += `${section.content}\n\n`
+      } else if (section.content.type === 'list') {
+        section.content.items.forEach((item: string) => {
+          markdown += `- ${item}\n`
+        })
+        markdown += '\n'
+      } else if (section.content.type === 'table') {
+        // Format as markdown table
+        markdown += '| ' + section.content.headers.join(' | ') + ' |\n'
+        markdown += '| ' + section.content.headers.map(() => '---').join(' | ') + ' |\n'
+        section.content.rows.forEach((row: any) => {
+          markdown += '| ' + Object.values(row).join(' | ') + ' |\n'
+        })
+        markdown += '\n'
+      }
+    })
+
+    if (result.recommendations && result.recommendations.length > 0) {
+      markdown += `## Recommendations\n\n`
+      result.recommendations.forEach(rec => {
+        markdown += `### ${rec.title} (${rec.priority} priority)\n`
+        markdown += `${rec.description}\n\n`
+      })
+    }
+
+    return markdown
+  }
+
+  private static exportAsHtml(result: AnalysisResult): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${result.type} Analysis</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    h1 { color: #333; }
+    h2 { color: #666; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .metadata { background: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+    .recommendation { margin: 10px 0; padding: 10px; border-left: 3px solid #007bff; background: #f0f8ff; }
+    .high-priority { border-color: #dc3545; background: #fff5f5; }
+    .medium-priority { border-color: #ffc107; background: #fffef5; }
+    .low-priority { border-color: #28a745; background: #f5fff5; }
+    table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h1>${result.type} Analysis</h1>
+
+  <div class="metadata">
+    <p><strong>Status:</strong> ${result.status}</p>
+    <p><strong>Date:</strong> ${new Date(result.metadata.startedAt).toLocaleString()}</p>
+    ${result.metadata.duration ? `<p><strong>Duration:</strong> ${(result.metadata.duration / 1000).toFixed(2)}s</p>` : ''}
+  </div>
+
+  ${result.sections?.map(section => `
+    <h2>${section.title}</h2>
+    ${this.formatSectionAsHtml(section)}
+  `).join('')}
+
+  ${result.recommendations && result.recommendations.length > 0 ? `
+    <h2>Recommendations</h2>
+    ${result.recommendations.map(rec => `
+      <div class="recommendation ${rec.priority}-priority">
+        <strong>${rec.title}</strong>
+        <p>${rec.description}</p>
+      </div>
+    `).join('')}
+  ` : ''}
+</body>
+</html>
+    `
+  }
+
+  private static formatSectionAsHtml(section: AnalysisSection): string {
+    if (typeof section.content === 'string') {
+      return `<p>${section.content.replace(/\n/g, '<br>')}</p>`
+    }
+
+    if (section.content.type === 'list') {
+      return `<ul>${section.content.items.map((item: string) => `<li>${item}</li>`).join('')}</ul>`
+    }
+
+    if (section.content.type === 'table') {
+      return `
+        <table>
+          <thead>
+            <tr>${section.content.headers.map((h: string) => `<th>${h}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${section.content.rows.map((row: any) => `
+              <tr>${Object.values(row).map(cell => `<td>${cell}</td>`).join('')}</tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `
+    }
+
+    return ''
+  }
+}
+
+// Types for formatter
+interface FormatterOptions {
+  includeMetadata?: boolean
+  includeRecommendations?: boolean
+  includeSources?: boolean
+  highlightSections?: string[]
+  theme?: 'light' | 'dark'
+}
+
+interface FormattedResult {
+  id: string
+  type: string
+  status: string
+  summary: string
+  sections: FormattedSection[]
+  metrics: FormattedMetrics
+  recommendations?: FormattedRecommendation[]
+  sources?: any[]
+  metadata?: FormattedMetadata
+  theme: string
+}
+
+interface FormattedSection extends AnalysisSection {
+  formatted: string | React.ReactNode
+}
+
+interface FormattedMetrics {
+  primary: any[]
+  secondary: any[]
+}
+
+interface FormattedRecommendation extends Recommendation {
+  icon: string
+  color: string
+}
+
+interface FormattedMetadata {
+  duration?: string
+  tokensUsed?: string
+  model?: string
+  completedAt?: string
+}
+
+// src/modules/analysis/analysis-engine.ts
+import { v4 as uuidv4 } from 'uuid'
+import { aiService } from '../ai/ai-service'
 import {
-  Activity,
-  Clock,
-  User,
-  Monitor,
-  LogOut,
-  RefreshCw,
-  Archive
-} from 'lucide-react'
-import { useSession } from '../hooks/useSession'
-import { SessionManager, Session, SessionActivity } from '../session/session-manager'
-import { formatDistanceToNow } from 'date-fns'
+  AnalysisRequest,
+  AnalysisResult,
+  AnalysisType,
+  PromptTemplate
+} from './types'
+import { promptTemplates, compileTemplate } from './prompt-templates'
+import { analysisTypes } from './analysis-types'
+import { ResponseParser } from './response-parser'
+import { ResultFormatter } from './result-formatter'
 
-export function SessionViewer() {
-  const { session, isActive, startSession, endSession, trackActivity } = useSession()
-  const [sessionHistory, setSessionHistory] = useState<Session[]>([])
-  const [stats, setStats] = useState<any>(null)
-  const [selectedSession, setSelectedSession] = useState<Session | null>(null)
+export class AnalysisEngine {
+  private activeAnalyses: Map<string, AnalysisResult> = new Map()
+  private analysisHistory: AnalysisResult[] = []
+  private maxHistorySize: number = 100
 
-  useEffect(() => {
-    loadSessionHistory()
-    loadStats()
+  /**
+   * Run an analysis based on type and inputs
+   */
+  async analyze(request: AnalysisRequest): Promise<AnalysisResult> {
+    const analysisId = uuidv4()
+    const analysisType = analysisTypes[request.type]
+
+    if (!analysisType) {
+      throw new Error(`Unknown analysis type: ${request.type}`)
+    }
+
+    // Validate inputs
+    this.validateInputs(request.inputs, analysisType)
+
+    // Create initial result
+    const result: AnalysisResult = {
+      id: analysisId,
+      type: request.type,
+      status: 'pending',
+      inputs: request.inputs,
+      metadata: {
+        startedAt: new Date()
+      }
+    }
+
+    this.activeAnalyses.set(analysisId, result)
+
+    try {
+      // Update status
+      result.status = 'processing'
+
+      // Get appropriate prompt template
+      const template = promptTemplates[request.type] || promptTemplates.customAnalysis
+
+      // Compile prompt with inputs
+      const prompt = this.compilePrompt(template, request)
+
+      // Call AI service
+      const startTime = Date.now()
+      const aiResponse = await aiService.generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 2000,
+        systemPrompt: this.getSystemPrompt(analysisType)
+      })
+      const endTime = Date.now()
+
+      // Parse response
+      const parsedResult = ResponseParser.parseAnalysisResponse(
+        aiResponse,
+        request.type,
+        analysisType.outputFormat.type
+      )
+
+      // Update result
+      Object.assign(result, parsedResult)
+      result.status = 'completed'
+      result.metadata.completedAt = new Date()
+      result.metadata.duration = endTime - startTime
+
+      // Store in history
+      this.addToHistory(result)
+
+      return result
+
+    } catch (error) {
+      result.status = 'failed'
+      result.metadata.error = error.message
+      result.metadata.completedAt = new Date()
+
+      this.addToHistory(result)
+      throw error
+
+    } finally {
+      this.activeAnalyses.delete(analysisId)
+    }
+  }
+
+  /**
+   * Run multiple analyses in parallel
+   */
+  async analyzeMultiple(requests: AnalysisRequest[]): Promise<AnalysisResult[]> {
+    const promises = requests.map(request => this.analyze(request))
+    return Promise.all(promises)
+  }
+
+  /**
+   * Stream analysis results (for long-running analyses)
+   */
+  async *analyzeStream(request: AnalysisRequest): AsyncGenerator<Partial<AnalysisResult>> {
+    const analysisId = uuidv4()
+    const analysisType = analysisTypes[request.type]
+
+    if (!analysisType) {
+      throw new Error(`Unknown analysis type: ${request.type}`)
+    }
+
+    // Initial result
+    yield {
+      id: analysisId,
+      type: request.type,
+      status: 'pending',
+      inputs: request.inputs,
+      metadata: { startedAt: new Date() }
+    }
+
+    try {
+      // Update status
+      yield { status: 'processing' }
+
+      // Get template and compile prompt
+      const template = promptTemplates[request.type] || promptTemplates.customAnalysis
+      const prompt = this.compilePrompt(template, request)
+
+      // Stream AI response
+      const stream = await aiService.generateText(prompt, {
+        temperature: 0.7,
+        maxTokens: 2000,
+        stream: true,
+        systemPrompt: this.getSystemPrompt(analysisType)
+      })
+
+      let fullResponse = ''
+      for await (const chunk of stream) {
+        fullResponse += chunk
+
+        // Periodically parse and yield partial results
+        if (fullResponse.length % 500 === 0) {
+          const partial = ResponseParser.parseAnalysisResponse(
+            fullResponse,
+            request.type,
+            analysisType.outputFormat.type
+          )
+          yield partial
+        }
+      }
+
+      // Final parse
+      const finalResult = ResponseParser.parseAnalysisResponse(
+        fullResponse,
+        request.type,
+        analysisType.outputFormat.type
+      )
+
+      yield {
+        ...finalResult,
+        status: 'completed',
+        metadata: {
+          completedAt: new Date()
+        }
+      }
+
+    } catch (error) {
+      yield {
+        status: 'failed',
+        metadata: {
+          error: error.message,
+          completedAt: new Date()
+        }
+      }
+    }
+  }
+
+  /**
+   * Get analysis by ID
+   */
+  getAnalysis(id: string): AnalysisResult | undefined {
+    // Check active analyses
+    const active = this.activeAnalyses.get(id)
+    if (active) return active
+
+    // Check history
+    return this.analysisHistory.find(a => a.id === id)
+  }
+
+  /**
+   * Get analysis history
+   */
+  getHistory(options?: {
+    type?: string
+    status?: string
+    limit?: number
+    offset?: number
+  }): AnalysisResult[] {
+    let results = [...this.analysisHistory]
+
+    if (options?.type) {
+      results = results.filter(r => r.type === options.type)
+    }
+
+    if (options?.status) {
+      results = results.filter(r => r.status === options.status)
+    }
+
+    if (options?.offset) {
+      results = results.slice(options.offset)
+    }
+
+    if (options?.limit) {
+      results = results.slice(0, options.limit)
+    }
+
+    return results
+  }
+
+  /**
+   * Clear analysis history
+   */
+  clearHistory() {
+    this.analysisHistory = []
+  }
+
+  /**
+   * Get available analysis types
+   */
+  getAvailableTypes(): AnalysisType[] {
+    return Object.values(analysisTypes)
+  }
+
+  /**
+   * Get analysis type by ID
+   */
+  getAnalysisType(id: string): AnalysisType | undefined {
+    return analysisTypes[id]
+  }
+
+  /**
+   * Register custom analysis type
+   */
+  registerAnalysisType(type: AnalysisType, template?: PromptTemplate) {
+    analysisTypes[type.id] = type
+
+    if (template) {
+      promptTemplates[type.id] = template
+    }
+  }
+
+  // Private methods
+
+  private validateInputs(inputs: Record<string, any>, analysisType: AnalysisType) {
+    for (const input of analysisType.requiredInputs) {
+      if (input.required && !inputs[input.name]) {
+        throw new Error(`Missing required input: ${input.name}`)
+      }
+
+      if (input.maxLength && inputs[input.name]?.length > input.maxLength) {
+        throw new Error(`Input "${input.name}" exceeds maximum length of ${input.maxLength}`)
+      }
+    }
+  }
+
+  private compilePrompt(template: PromptTemplate, request: AnalysisRequest): string {
+    const variables: Record<string, any> = {
+      ...request.inputs,
+      ...request.options
+    }
+
+    // Add default values
+    template.variables.forEach(variable => {
+      if (variable.default !== undefined && variables[variable.name] === undefined) {
+        variables[variable.name] = variable.default
+      }
+    })
+
+    return compileTemplate(template.template, variables)
+  }
+
+  private getSystemPrompt(analysisType: AnalysisType): string {
+    return `You are an expert analyst specializing in ${analysisType.name}.
+Provide detailed, actionable insights based on the input provided.
+Structure your response clearly with appropriate sections and formatting.
+Be objective, thorough, and highlight both strengths and areas for improvement.`
+  }
+
+  private addToHistory(result: AnalysisResult) {
+    this.analysisHistory.unshift(result)
+
+    // Trim history if needed
+    if (this.analysisHistory.length > this.maxHistorySize) {
+      this.analysisHistory = this.analysisHistory.slice(0, this.maxHistorySize)
+    }
+  }
+}
+
+// Singleton instance
+export const analysisEngine = new AnalysisEngine()
+
+// src/modules/analysis/hooks/useAnalysis.ts
+import { useState, useCallback } from 'react'
+import { analysisEngine } from '../analysis-engine'
+import { AnalysisRequest, AnalysisResult, AnalysisOptions } from '../types'
+
+export function useAnalysis() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const [result, setResult] = useState<AnalysisResult | null>(null)
+
+  const analyze = useCallback(async (
+    type: string,
+    inputs: Record<string, any>,
+    options?: AnalysisOptions
+  ) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const request: AnalysisRequest = { type, inputs, options }
+      const analysisResult = await analysisEngine.analyze(request)
+      setResult(analysisResult)
+      return analysisResult
+    } catch (err) {
+      setError(err as Error)
+      throw err
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const loadSessionHistory = async () => {
-    const manager = new SessionManager()
-    const history = await manager.getSessionHistory(undefined, 10)
-    setSessionHistory(history)
-  }
+  const analyzeMultiple = useCallback(async (requests: AnalysisRequest[]) => {
+    setLoading(true)
+    setError(null)
 
-  const loadStats = async () => {
-    // Calculate session stats
-    const manager = new SessionManager()
-    const history = await manager.getSessionHistory(undefined, 100)
-
-    const totalDuration = history.reduce((sum, s) => {
-      const duration = new Date(s.lastActiveAt).getTime() - new Date(s.startedAt).getTime()
-      return sum + duration
-    }, 0)
-
-    const avgDuration = history.length > 0 ? totalDuration / history.length : 0
-
-    setStats({
-      totalSessions: history.length,
-      avgDuration: Math.round(avgDuration / 1000 / 60), // minutes
-      totalActivities: history.reduce((sum, s) => sum + s.activities.length, 0)
-    })
-  }
-
-  const handleStartSession = async () => {
-    await startSession(undefined, { source: 'manual' })
-    loadSessionHistory()
-  }
-
-  const handleEndSession = async () => {
-    await endSession('manual')
-    loadSessionHistory()
-  }
-
-  const formatDuration = (start: Date, end: Date) => {
-    const duration = new Date(end).getTime() - new Date(start).getTime()
-    const minutes = Math.floor(duration / 1000 / 60)
-    const hours = Math.floor(minutes / 60)
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`
+    try {
+      const results = await analysisEngine.analyzeMultiple(requests)
+      return results
+    } catch (err) {
+      setError(err as Error)
+      throw err
+    } finally {
+      setLoading(false)
     }
-    return `${minutes}m`
+  }, [])
+
+  const clear = useCallback(() => {
+    setResult(null)
+    setError(null)
+  }, [])
+
+  return {
+    analyze,
+    analyzeMultiple,
+    result,
+    loading,
+    error,
+    clear
+  }
+}
+
+// src/modules/analysis/hooks/useAnalysisStream.ts
+import { useState, useCallback, useRef } from 'react'
+import { analysisEngine } from '../analysis-engine'
+import { AnalysisRequest, AnalysisResult } from '../types'
+
+export function useAnalysisStream() {
+  const [result, setResult] = useState<Partial<AnalysisResult> | null>(null)
+  const [streaming, setStreaming] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const startStream = useCallback(async (request: AnalysisRequest) => {
+    setStreaming(true)
+    setError(null)
+    setResult(null)
+
+    abortControllerRef.current = new AbortController()
+
+    try {
+      const stream = analysisEngine.analyzeStream(request)
+
+      for await (const partial of stream) {
+        if (abortControllerRef.current?.signal.aborted) {
+          break
+        }
+
+        setResult(current => ({ ...current, ...partial }))
+      }
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setStreaming(false)
+    }
+  }, [])
+
+  const stopStream = useCallback(() => {
+    abortControllerRef.current?.abort()
+    setStreaming(false)
+  }, [])
+
+  return {
+    result,
+    streaming,
+    error,
+    startStream,
+    stopStream
+  }
+}
+
+// src/modules/analysis/analysis-provider.tsx
+import React, { createContext, useContext, useState, useEffect } from 'react'
+import { analysisEngine } from './analysis-engine'
+import { AnalysisType, AnalysisResult } from './types'
+
+interface AnalysisContextValue {
+  availableTypes: AnalysisType[]
+  history: AnalysisResult[]
+  getAnalysis: (id: string) => AnalysisResult | undefined
+  clearHistory: () => void
+}
+
+const AnalysisContext = createContext<AnalysisContextValue | null>(null)
+
+export function AnalysisProvider({ children }: { children: React.ReactNode }) {
+  const [availableTypes, setAvailableTypes] = useState<AnalysisType[]>([])
+  const [history, setHistory] = useState<AnalysisResult[]>([])
+
+  useEffect(() => {
+    // Load available analysis types
+    setAvailableTypes(analysisEngine.getAvailableTypes())
+
+    // Load history
+    setHistory(analysisEngine.getHistory({ limit: 50 }))
+  }, [])
+
+  const getAnalysis = (id: string) => {
+    return analysisEngine.getAnalysis(id)
   }
 
-  const getActivityIcon = (type: SessionActivity['type']) => {
-    const icons = {
-      page_view: '👁️',
-      action: '🎯',
-      api_call: '🔌',
-      error: '⚠️'
-    }
-    return icons[type] || '📌'
+  const clearHistory = () => {
+    analysisEngine.clearHistory()
+    setHistory([])
   }
 
   return (
+    <AnalysisContext.Provider value={{
+      availableTypes,
+      history,
+      getAnalysis,
+      clearHistory
+    }}>
+      {children}
+    </AnalysisContext.Provider>
+  )
+}
+
+export function useAnalysisContext() {
+  const context = useContext(AnalysisContext)
+  if (!context) {
+    throw new Error('useAnalysisContext must be used within AnalysisProvider')
+  }
+  return context
+}
+
+// src/modules/analysis/components/analysis-runner.tsx
+import { useState } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+import { Button } from '~components/ui/button'
+import { Textarea } from '~components/ui/textarea'
+import { Input } from '~components/ui/input'
+import { Label } from '~components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
+import { Alert, AlertDescription } from '~components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
+import { Badge } from '~components/ui/badge'
+import { Loader2, Play, FileText, BarChart, AlertCircle } from 'lucide-react'
+import { useAnalysis } from '../hooks/useAnalysis'
+import { useAnalysisContext } from '../analysis-provider'
+import { AnalysisType } from '../types'
+
+export function AnalysisRunner() {
+  const { availableTypes } = useAnalysisContext()
+  const { analyze, result, loading, error } = useAnalysis()
+
+  const [selectedType, setSelectedType] = useState<string>('')
+  const [inputs, setInputs] = useState<Record<string, any>>({})
+  const [options, setOptions] = useState({
+    depth: 'standard' as 'quick' | 'standard' | 'detailed',
+    includeRecommendations: true,
+    includeSources: true
+  })
+
+  const selectedAnalysisType = availableTypes.find(t => t.id === selectedType)
+
+  const handleInputChange = (name: string, value: any) => {
+    setInputs(prev => ({ ...prev, [name]: value }))
+  }
+
+  const handleAnalyze = async () => {
+    if (!selectedType) return
+
+    try {
+      await analyze(selectedType, inputs, options)
+    } catch (err) {
+      console.error('Analysis failed:', err)
+    }
+  }
+
+  const canAnalyze = selectedType &&
+    selectedAnalysisType?.requiredInputs.every(input =>
+      !input.required || inputs[input.name]
+    )
+
+  return (
     <div className="space-y-6">
-      {/* Current Session */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Current Session
-            </span>
-            {isActive ? (
-              <Badge variant="default" className="bg-green-500">Active</Badge>
-            ) : (
-              <Badge variant="secondary">Inactive</Badge>
-            )}
-          </CardTitle>
+          <CardTitle>Run Analysis</CardTitle>
+          <CardDescription>
+            Select an analysis type and provide the required inputs
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {session ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Started</p>
-                  <p className="font-medium">
-                    {formatDistanceToNow(new Date(session.startedAt), { addSuffix: true })}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Duration</p>
-                  <p className="font-medium">
-                    {formatDuration(session.startedAt, session.lastActiveAt)}
-                  </p>
-                </div>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Analysis Type</Label>
+            <Select value={selectedType} onValueChange={setSelectedType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select analysis type" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableTypes.map(type => (
+                  <SelectItem key={type.id} value={type.id}>
+                    <div className="flex items-center gap-2">
+                      <span>{type.icon}</span>
+                      <span>{type.name}</span>
+                      {type.aiRequired && (
+                        <Badge variant="outline" className="ml-2">AI</Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedAnalysisType && (
+            <>
+              <div className="text-sm text-muted-foreground">
+                {selectedAnalysisType.description}
               </div>
 
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Session Progress</p>
-                {session.expiresAt && (
-                  <Progress
-                    value={
-                      ((new Date().getTime() - new Date(session.startedAt).getTime()) /
-                      (new Date(session.expiresAt).getTime() - new Date(session.startedAt).getTime())) * 100
-                    }
-                    className="h-2"
-                  />
-                )}
+              <div className="space-y-4">
+                {selectedAnalysisType.requiredInputs.map(input => (
+                  <div key={input.name} className="space-y-2">
+                    <Label>
+                      {input.name.charAt(0).toUpperCase() + input.name.slice(1)}
+                      {input.required && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
+                    {input.description && (
+                      <p className="text-xs text-muted-foreground">{input.description}</p>
+                    )}
+                    {input.type === 'text' && input.maxLength && input.maxLength > 500 ? (
+                      <Textarea
+                        value={inputs[input.name] || ''}
+                        onChange={(e) => handleInputChange(input.name, e.target.value)}
+                        placeholder={`Enter ${input.name}...`}
+                        maxLength={input.maxLength}
+                        rows={5}
+                      />
+                    ) : (
+                      <Input
+                        type={input.type === 'url' ? 'url' : 'text'}
+                        value={inputs[input.name] || ''}
+                        onChange={(e) => handleInputChange(input.name, e.target.value)}
+                        placeholder={`Enter ${input.name}...`}
+                        maxLength={input.maxLength}
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => trackActivity('action', { type: 'manual_track' })}
-                >
-                  Track Activity
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleEndSession}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  End Session
-                </Button>
+              <div className="space-y-4 pt-4 border-t">
+                <Label>Analysis Options</Label>
+                <div className="space-y-2">
+                  <Label className="text-sm">Depth</Label>
+                  <Select
+                    value={options.depth}
+                    onValueChange={(value: any) => setOptions(prev => ({ ...prev, depth: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quick">Quick (Fast overview)</SelectItem>
+                      <SelectItem value="standard">Standard (Balanced)</SelectItem>
+                      <SelectItem value="detailed">Detailed (Comprehensive)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">No active session</p>
-              <Button onClick={handleStartSession}>
-                Start New Session
-              </Button>
-            </div>
+            </>
           )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error.message}</AlertDescription>
+            </Alert>
+          )}
+
+          <Button
+            className="w-full"
+            onClick={handleAnalyze}
+            disabled={!canAnalyze || loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Run Analysis
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Session Stats */}
-      {stats && (
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{stats.totalSessions}</div>
-              <p className="text-xs text-muted-foreground">Total Sessions</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{stats.avgDuration}m</div>
-              <p className="text-xs text-muted-foreground">Avg Duration</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-2xl font-bold">{stats.totalActivities}</div>
-              <p className="text-xs text-muted-foreground">Total Activities</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Session History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Session History</span>
-            <Button size="sm" variant="ghost" onClick={loadSessionHistory}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="list">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="list">List View</TabsTrigger>
-              <TabsTrigger value="details">Details</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="list" className="space-y-2">
-              {sessionHistory.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent cursor-pointer"
-                  onClick={() => setSelectedSession(s)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">
-                        {new Date(s.startedAt).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Duration: {formatDuration(s.startedAt, s.lastActiveAt)} •
-                        {s.activities.length} activities
-                      </p>
-                    </div>
-                  </div>
-                  {s.device && (
-                    <Badge variant="outline">
-                      <Monitor className="h-3 w-3 mr-1" />
-                      {s.device.screen}
-                    </Badge>
-                  )}
-                </div>
-              ))}
-            </TabsContent>
-
-            <TabsContent value="details">
-              {selectedSession ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <h4 className="font-medium mb-2">Session Info</h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">ID:</span> {selectedSession.id}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Duration:</span>{' '}
-                        {formatDuration(selectedSession.startedAt, selectedSession.lastActiveAt)}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Device:</span>{' '}
-                        {selectedSession.device?.screen}
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Activities:</span>{' '}
-                        {selectedSession.activities.length}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Activity Timeline</h4>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {selectedSession.activities.map((activity, idx) => (
-                        <div key={idx} className="flex items-start gap-2 text-sm">
-                          <span className="text-lg">{getActivityIcon(activity.type)}</span>
-                          <div className="flex-1">
-                            <p className="font-medium">{activity.type}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(activity.timestamp).toLocaleTimeString()}
-                            </p>
-                            {activity.details && (
-                              <pre className="text-xs mt-1 p-2 bg-muted rounded">
-                                {JSON.stringify(activity.details, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  Select a session to view details
-                </p>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      {result && <AnalysisResultView result={result} />}
     </div>
   )
 }
 
-// src/modules/storage/components/history-timeline.tsx
-import { useState, useEffect } from 'react'
+// src/modules/analysis/components/analysis-result-view.tsx
 import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
-import { Button } from '~components/ui/button'
-import { Input } from '~components/ui/input'
-import { Badge } from '~components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
-import { Calendar } from '~components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '~components/ui/popover'
+import { Badge } from '~components/ui/badge'
+import { Button } from '~components/ui/button'
+import { Progress } from '~components/ui/progress'
 import {
-  History,
-  Search,
-  Filter,
-  Calendar as CalendarIcon,
-  Download,
-  Trash2,
+  FileDown,
+  Copy,
+  Share,
+  CheckCircle,
+  AlertCircle,
+  Info,
   TrendingUp,
-  BarChart3,
-  Clock
+  TrendingDown
 } from 'lucide-react'
-import { useHistory } from '../hooks/useHistory'
-import { HistoryItem, HistoryGroup, HistoryStats } from '../history/history-manager'
-import { format, formatDistanceToNow } from 'date-fns'
-import { cn } from '~lib/utils'
+import { AnalysisResult, AnalysisSection, Recommendation } from '../types'
+import { ResultFormatter } from '../result-formatter'
 
-export function HistoryTimeline() {
-  const { items, loading, loadItems, searchHistory, getTimeline, getStats, clearHistory, exportHistory } = useHistory()
-  const [timeline, setTimeline] = useState<HistoryGroup[]>([])
-  const [stats, setStats] = useState<HistoryStats | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    to: new Date()
-  })
-  const [activeTab, setActiveTab] = useState('timeline')
+interface AnalysisResultViewProps {
+  result: AnalysisResult
+}
 
-  useEffect(() => {
-    loadData()
-  }, [selectedTypes, dateRange])
+export function AnalysisResultView({ result }: AnalysisResultViewProps) {
+  const formatted = ResultFormatter.formatForUI(result)
 
-  const loadData = async () => {
-    const filters = {
-      types: selectedTypes.length > 0 ? selectedTypes : undefined,
-      dateRange: {
-        start: dateRange.from,
-        end: dateRange.to
-      }
-    }
+  const handleExport = (format: 'pdf' | 'html' | 'markdown' | 'json') => {
+    const content = ResultFormatter.export(result, format)
 
-    await loadItems(filters, 100)
-    const timelineData = await getTimeline(7, filters)
-    setTimeline(timelineData)
-
-    const statsData = await getStats(30)
-    setStats(statsData)
-  }
-
-  const handleSearch = () => {
-    if (searchTerm) {
-      searchHistory(searchTerm)
-    } else {
-      loadData()
-    }
-  }
-
-  const handleExport = async () => {
-    const blob = await exportHistory({
-      types: selectedTypes.length > 0 ? selectedTypes : undefined,
-      dateRange: { start: dateRange.from, end: dateRange.to }
+    // Create download
+    const blob = content instanceof Blob ? content : new Blob([content], {
+      type: format === 'json' ? 'application/json' : 'text/plain'
     })
 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `history-export-${format(new Date(), 'yyyy-MM-dd')}.json`
+    a.download = `analysis-${result.id}.${format}`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const handleClear = async () => {
-    if (confirm('Are you sure you want to clear selected history? This cannot be undone.')) {
-      await clearHistory({
-        types: selectedTypes.length > 0 ? selectedTypes : undefined,
-        dateRange: { start: dateRange.from, end: dateRange.to }
-      })
-      loadData()
-    }
-  }
-
-  const getTypeIcon = (type: HistoryItem['type']) => {
-    const icons = {
-      analysis: '🔍',
-      fact_check: '✓',
-      search: '🔎',
-      action: '⚡',
-      view: '👁️',
-      custom: '📌'
-    }
-    return icons[type] || '📄'
-  }
-
-  const getTypeColor = (type: HistoryItem['type']) => {
-    const colors = {
-      analysis: 'bg-blue-500',
-      fact_check: 'bg-green-500',
-      search: 'bg-purple-500',
-      action: 'bg-orange-500',
-      view: 'bg-gray-500',
-      custom: 'bg-pink-500'
-    }
-    return colors[type] || 'bg-gray-500'
+  const handleCopy = () => {
+    const markdown = ResultFormatter.export(result, 'markdown')
+    navigator.clipboard.writeText(markdown as string)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            History Manager
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Search Bar */}
-            <div className="flex gap-2">
-              <Input
-                placeholder="Search history..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="flex-1"
-              />
-              <Button onClick={handleSearch}>
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Filters */}
-            <div className="flex flex-wrap gap-2">
-              <Select
-                value={selectedTypes.join(',')}
-                onValueChange={(value) => setSelectedTypes(value ? value.split(',') : [])}
-              >
-                <SelectTrigger className="w-[200px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
-                  <SelectItem value="analysis">Analysis</SelectItem>
-                  <SelectItem value="fact_check">Fact Check</SelectItem>
-                  <SelectItem value="search">Search</SelectItem>
-                  <SelectItem value="action">Action</SelectItem>
-                  <SelectItem value="view">View</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="justify-start">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {format(dateRange.from, 'MMM d')} - {format(dateRange.to, 'MMM d')}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="range"
-                    selected={{ from: dateRange.from, to: dateRange.to }}
-                    onSelect={(range: any) => {
-                      if (range?.from && range?.to) {
-                        setDateRange({ from: range.from, to: range.to })
-                      }
-                    }}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-
-              <div className="ml-auto flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleExport}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-                <Button variant="destructive" size="sm" onClick={handleClear}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear
-                </Button>
-              </div>
-            </div>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              {result.type.charAt(0).toUpperCase() + result.type.slice(1)} Analysis
+              {result.status === 'completed' && (
+                <Badge variant="outline" className="bg-green-50">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Completed
+                </Badge>
+              )}
+            </CardTitle>
+            {formatted.metadata && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Completed in {formatted.metadata.duration} • {formatted.metadata.model}
+              </p>
+            )}
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => handleExport('markdown')}>
+              <FileDown className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleCopy}>
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline">
+              <Share className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="overview">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="recommendations">
+              Recommendations
+              {result.recommendations && (
+                <Badge variant="secondary" className="ml-2">
+                  {result.recommendations.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="export">Export</TabsTrigger>
+          </TabsList>
 
-      {/* Main Content */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="stats">Statistics</TabsTrigger>
-          <TabsTrigger value="list">List View</TabsTrigger>
-        </TabsList>
+          <TabsContent value="overview" className="space-y-4">
+            {formatted.summary && (
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm">{formatted.summary}</p>
+              </div>
+            )}
 
-        <TabsContent value="timeline" className="space-y-4">
-          {loading ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Loading timeline...</p>
-            </div>
-          ) : (
-            timeline.map((group) => (
-              <Card key={group.id}>
-                <CardHeader>
-                  <CardTitle className="text-base">{group.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {group.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors"
-                      >
-                        <div className="text-2xl">{getTypeIcon(item.type)}</div>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{item.title}</p>
-                            <Badge className={cn('text-xs', getTypeColor(item.type))}>
-                              {item.type}
-                            </Badge>
-                          </div>
-                          {item.description && (
-                            <p className="text-sm text-muted-foreground">{item.description}</p>
-                          )}
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {format(new Date(item.timestamp), 'HH:mm')}
-                            </span>
-                            {item.metadata?.duration && (
-                              <span>Duration: {item.metadata.duration}ms</span>
-                            )}
-                            {item.metadata?.tags && (
-                              <div className="flex gap-1">
-                                {item.metadata.tags.map((tag) => (
-                                  <Badge key={tag} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="stats">
-          {stats && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-2xl font-bold">{stats.totalItems}</div>
-                    <p className="text-xs text-muted-foreground">Total Items</p>
-                  </CardContent>
-                </Card>
-                {Object.entries(stats.itemsByType).map(([type, count]) => (
-                  <Card key={type}>
+            {formatted.metrics.primary.length > 0 && (
+              <div className="grid grid-cols-3 gap-4">
+                {formatted.metrics.primary.map((metric, index) => (
+                  <Card key={index}>
                     <CardContent className="pt-6">
-                      <div className="text-2xl font-bold">{count}</div>
-                      <p className="text-xs text-muted-foreground capitalize">{type}</p>
+                      <div className="text-2xl font-bold">
+                        {metric.format === 'percentage'
+                          ? `${(metric.value * 100).toFixed(1)}%`
+                          : metric.value
+                        }
+                        {metric.max && ` / ${metric.max}`}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{metric.label}</p>
                     </CardContent>
                   </Card>
                 ))}
               </div>
+            )}
+          </TabsContent>
 
-              <Card>
+          <TabsContent value="details" className="space-y-4">
+            {formatted.sections.map((section) => (
+              <Card key={section.id} className={section.highlight ? 'border-primary' : ''}>
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4" />
-                    Activity Over Time
-                  </CardTitle>
+                  <CardTitle className="text-lg">{section.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    {stats.itemsByDay.map((day) => (
-                      <div key={day.date} className="flex items-center gap-2">
-                        <span className="text-sm w-24">{format(new Date(day.date), 'MMM d')}</span>
-                        <div className="flex-1 bg-muted rounded-full h-6 relative">
-                          <div
-                            className="absolute inset-y-0 left-0 bg-primary rounded-full"
-                            style={{
-                              width: `${(day.count / Math.max(...stats.itemsByDay.map(d => d.count))) * 100}%`
-                            }}
-                          />
-                          <span className="absolute inset-0 flex items-center justify-center text-xs">
-                            {day.count}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {renderSectionContent(section)}
                 </CardContent>
               </Card>
+            ))}
+          </TabsContent>
 
-              {stats.topTags.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Top Tags</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {stats.topTags.map(({ tag, count }) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag} ({count})
-                        </Badge>
-                      ))}
+          <TabsContent value="recommendations" className="space-y-4">
+            {formatted.recommendations && formatted.recommendations.length > 0 ? (
+              formatted.recommendations.map((rec) => (
+                <Card key={rec.id} className={`border-l-4 ${
+                  rec.priority === 'high' ? 'border-l-red-500' :
+                  rec.priority === 'medium' ? 'border-l-yellow-500' :
+                  'border-l-green-500'
+                }`}>
+                  <CardContent className="pt-4">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">{rec.icon}</span>
+                      <div className="flex-1">
+                        <h4 className="font-medium">{rec.title}</h4>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {rec.description}
+                        </p>
+                        {rec.impact && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Impact: {rec.impact}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant={
+                        rec.priority === 'high' ? 'destructive' :
+                        rec.priority === 'medium' ? 'default' :
+                        'secondary'
+                      }>
+                        {rec.priority}
+                      </Badge>
                     </div>
                   </CardContent>
                 </Card>
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="list">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{getTypeIcon(item.type)}</span>
-                      <div>
-                        <p className="font-medium">{item.title}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline">{item.type}</Badge>
-                  </div>
-                ))}
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No recommendations available
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="export" className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('pdf')}>
+                <CardContent className="pt-6 text-center">
+                  <FileDown className="h-8 w-8 mx-auto mb-2" />
+                  <p className="font-medium">Export as PDF</p>
+                  <p className="text-xs text-muted-foreground">Professional report format</p>
+                </CardContent>
+              </Card>
+              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('html')}>
+                <CardContent className="pt-6 text-center">
+                  <FileDown className="h-8 w-8 mx-auto mb-2" />
+                  <p className="font-medium">Export as HTML</p>
+                  <p className="text-xs text-muted-foreground">Web-ready format</p>
+                </CardContent>
+              </Card>
+              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('markdown')}>
+                <CardContent className="pt-6 text-center">
+                  <FileDown className="h-8 w-8 mx-auto mb-2" />
+                  <p className="font-medium">Export as Markdown</p>
+                  <p className="text-xs text-muted-foreground">Documentation format</p>
+                </CardContent>
+              </Card>
+              <Card className="cursor-pointer hover:bg-muted/50" onClick={() => handleExport('json')}>
+                <CardContent className="pt-6 text-center">
+                  <FileDown className="h-8 w-8 mx-auto mb-2" />
+                  <p className="font-medium">Export as JSON</p>
+                  <p className="text-xs text-muted-foreground">Raw data format</p>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
   )
 }
 
-// src/modules/storage/components/settings-editor.tsx
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~components/ui/card'
+function renderSectionContent(section: AnalysisSection) {
+  if (typeof section.content === 'string') {
+    return <p className="whitespace-pre-wrap">{section.content}</p>
+  }
+
+  const formatted = section.formatted
+
+  if (typeof formatted === 'object' && formatted.type === 'metrics') {
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        {formatted.metrics.map((metric: any, index: number) => (
+          <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
+            <span className="text-sm font-medium">{metric.label}</span>
+            <span className="text-sm">
+              {metric.format === 'percentage'
+                ? `${(metric.value * 100).toFixed(1)}%`
+                : metric.value
+              }
+            </span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (typeof formatted === 'object' && formatted.type === 'list') {
+    return (
+      <ul className="space-y-1">
+        {formatted.items.map((item: string, index: number) => (
+          <li key={index} className="flex items-start gap-2">
+            <span className="text-muted-foreground">•</span>
+            <span className="text-sm">{item}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  if (typeof formatted === 'object' && formatted.type === 'table') {
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {formatted.headers.map((header: string, index: number) => (
+                <th key={index} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {formatted.rows.map((row: any, rowIndex: number) => (
+              <tr key={rowIndex}>
+                {Object.values(row).map((cell: any, cellIndex: number) => (
+                  <td key={cellIndex} className="px-4 py-2 text-sm">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
+  return <div>{JSON.stringify(section.content)}</div>
+}
+
+// src/modules/analysis/components/index.ts
+export { AnalysisRunner } from './analysis-runner'
+export { AnalysisResultView } from './analysis-result-view'
+export { AnalysisHistory } from './analysis-history'
+
+// src/modules/analysis/components/analysis-history.tsx
+import { Card, CardContent, CardHeader, CardTitle } from '~components/ui/card'
 import { Button } from '~components/ui/button'
-import { Input } from '~components/ui/input'
-import { Label } from '~components/ui/label'
-import { Switch } from '~components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~components/ui/tabs'
-import { Alert, AlertDescription } from '~components/ui/alert'
 import { Badge } from '~components/ui/badge'
-import { Textarea } from '~components/ui/textarea'
+import { Input } from '~components/ui/input'
 import {
-  Settings,
-  Palette,
-  Bell,
-  Shield,
-  Keyboard,
-  Download,
-  Upload,
-  RotateCcw,
-  Save,
-  AlertCircle
-} from 'lucide-react'
-import { useSettings } from '../hooks/useSettings'
-import { SettingsStore, Settings as SettingsType } from '../settings/settings-store'
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '~components/ui/table'
+import { Search, Trash2, Eye, Clock } from 'lucide-react'
+import { useAnalysisContext } from '../analysis-provider'
+import { useState } from 'react'
+import { AnalysisResult } from '../types'
 
-export function SettingsEditor() {
-  const appearanceSettings = useSettings<SettingsType['appearance']>('appearance')
-  const notificationSettings = useSettings<SettingsType['notifications']>('notifications')
-  const privacySettings = useSettings<SettingsType['privacy']>('privacy')
-  const shortcutSettings = useSettings<SettingsType['shortcuts']>('shortcuts')
+export function AnalysisHistory() {
+  const { history, clearHistory } = useAnalysisContext()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null)
 
-  const [importExportText, setImportExportText] = useState('')
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [changedSettings, setChangedSettings] = useState<Set<string>>(new Set())
+  const filteredHistory = history.filter(item =>
+    item.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    JSON.stringify(item.inputs).toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
-  // Subscribe to changes
-  useEffect(() => {
-    const unsubscribe = appearanceSettings.subscribe((event) => {
-      setChangedSettings(prev => new Set([...prev, event.key]))
-    })
-    return unsubscribe
-  }, [])
-
-  const handleSave = async () => {
-    setSaveStatus('saving')
-    try {
-      // Settings are auto-saved with useSettings hook
-      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate save
-      setSaveStatus('saved')
-      setChangedSettings(new Set())
-      setTimeout(() => setSaveStatus('idle'), 2000)
-    } catch (error) {
-      setSaveStatus('error')
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-50">Completed</Badge>
+      case 'failed':
+        return <Badge variant="destructive">Failed</Badge>
+      case 'processing':
+        return <Badge variant="default">Processing</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
     }
   }
 
-  const handleExportSettings = async () => {
-    const store = new SettingsStore()
-    const exported = await store.export()
-    setImportExportText(exported)
-  }
-
-  const handleImportSettings = async () => {
-    if (!importExportText) return
-
-    try {
-      const store = new SettingsStore()
-      await store.import(importExportText)
-      window.location.reload() // Reload to apply imported settings
-    } catch (error) {
-      alert('Invalid settings format')
-    }
-  }
-
-  const handleResetSection = async (section: string) => {
-    if (confirm(`Reset ${section} settings to defaults?`)) {
-      const store = new SettingsStore()
-      await store.reset(section)
-    }
+  const formatDuration = (duration?: number) => {
+    if (!duration) return '-'
+    return `${(duration / 1000).toFixed(2)}s`
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Settings
-            </span>
-            {changedSettings.size > 0 && (
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{changedSettings.size} changes</Badge>
-                <Button size="sm" onClick={handleSave} disabled={saveStatus === 'saving'}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {saveStatus === 'saving' ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            )}
-          </CardTitle>
-          <CardDescription>
-            Configure your extension preferences
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="appearance">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="appearance">Appearance</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              <TabsTrigger value="privacy">Privacy</TabsTrigger>
-              <TabsTrigger value="shortcuts">Shortcuts</TabsTrigger>
-              <TabsTrigger value="import-export">Import/Export</TabsTrigger>
-            </TabsList>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Analysis History</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => confirm('Clear all history?') && clearHistory()}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Clear All
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search history..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
-            <TabsContent value="appearance" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium flex items-center gap-2">
-                  <Palette className="h-4 w-4" />
-                  Appearance Settings
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleResetSection('appearance')}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
-              </div>
-
-              {appearanceSettings.value && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Theme</Label>
-                    <Select
-                      value={appearanceSettings.value.theme}
-                      onValueChange={(value: any) =>
-                        appearanceSettings.update({ ...appearanceSettings.value, theme: value })
-                      }
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Duration</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredHistory.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">
+                    {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+                  </TableCell>
+                  <TableCell>{getStatusBadge(item.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {new Date(item.metadata.startedAt).toLocaleString()}
+                    </div>
+                  </TableCell>
+                  <TableCell>{formatDuration(item.metadata.duration)}</TableCell>
+                  <TableCell>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setSelectedResult(item)}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="dark">Dark</SelectItem>
-                        <SelectItem value="system">System</SelectItem>
-                        <SelectItem value="auto">Auto (Time-based)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
 
-                  <div className="space-y-2">
-                    <Label>Font Size</Label>
-                    <Select
-                      value={appearanceSettings.value.fontSize}
-                      onValueChange={(value: any) =>
-                        appearanceSettings.update({ ...appearanceSettings.value, fontSize: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="small">Small</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="large">Large</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Compact Mode</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Reduce spacing and padding
-                        </p>
-                      </div>
-                      <Switch
-                        checked={appearanceSettings.value.compactMode}
-                        onCheckedChange={(checked) =>
-                          appearanceSettings.update({ ...appearanceSettings.value, compactMode: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Animations</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Enable UI animations
-                        </p>
-                      </div>
-                      <Switch
-                        checked={appearanceSettings.value.animations}
-                        onCheckedChange={(checked) =>
-                          appearanceSettings.update({ ...appearanceSettings.value, animations: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>High Contrast</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Increase contrast for better visibility
-                        </p>
-                      </div>
-                      <Switch
-                        checked={appearanceSettings.value.highContrast}
-                        onCheckedChange={(checked) =>
-                          appearanceSettings.update({ ...appearanceSettings.value, highContrast: checked })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="notifications" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Notification Settings
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleResetSection('notifications')}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
-              </div>
-
-              {notificationSettings.value && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Enable Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Show notifications from the extension
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notificationSettings.value.enabled}
-                      onCheckedChange={(checked) =>
-                        notificationSettings.update({ ...notificationSettings.value, enabled: checked })
-                      }
-                    />
-                  </div>
-
-                  {notificationSettings.value.enabled && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <Label>Sound</Label>
-                        <Switch
-                          checked={notificationSettings.value.sound}
-                          onCheckedChange={(checked) =>
-                            notificationSettings.update({ ...notificationSettings.value, sound: checked })
-                          }
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <Label>Desktop Notifications</Label>
-                        <Switch
-                          checked={notificationSettings.value.desktop}
-                          onCheckedChange={(checked) =>
-                            notificationSettings.update({ ...notificationSettings.value, desktop: checked })
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Notification Types</Label>
-                        <div className="space-y-2 p-3 border rounded-lg">
-                          {Object.entries(notificationSettings.value.types).map(([type, enabled]) => (
-                            <div key={type} className="flex items-center justify-between">
-                              <Label className="capitalize font-normal">{type}</Label>
-                              <Switch
-                                checked={enabled}
-                                onCheckedChange={(checked) =>
-                                  notificationSettings.update({
-                                    ...notificationSettings.value,
-                                    types: {
-                                      ...notificationSettings.value.types,
-                                      [type]: checked
-                                    }
-                                  })
-                                }
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="privacy" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Privacy Settings
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleResetSection('privacy')}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
-              </div>
-
-              {privacySettings.value && (
-                <div className="space-y-4">
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      These settings control how your data is collected and used.
-                    </AlertDescription>
-                  </Alert>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Usage Tracking</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Help improve the extension with anonymous usage data
-                        </p>
-                      </div>
-                      <Switch
-                        checked={privacySettings.value.trackingEnabled}
-                        onCheckedChange={(checked) =>
-                          privacySettings.update({ ...privacySettings.value, trackingEnabled: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Share Analytics</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Share crash reports and performance data
-                        </p>
-                      </div>
-                      <Switch
-                        checked={privacySettings.value.shareAnalytics}
-                        onCheckedChange={(checked) =>
-                          privacySettings.update({ ...privacySettings.value, shareAnalytics: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Storage Encryption</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Encrypt sensitive data in storage
-                        </p>
-                      </div>
-                      <Switch
-                        checked={privacySettings.value.storageEncryption}
-                        onCheckedChange={(checked) =>
-                          privacySettings.update({ ...privacySettings.value, storageEncryption: checked })
-                        }
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Clear Data on Uninstall</Label>
-                        <p className="text-sm text-muted-foreground">
-                          Remove all data when extension is uninstalled
-                        </p>
-                      </div>
-                      <Switch
-                        checked={privacySettings.value.clearDataOnUninstall}
-                        onCheckedChange={(checked) =>
-                          privacySettings.update({ ...privacySettings.value, clearDataOnUninstall: checked })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="shortcuts" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium flex items-center gap-2">
-                  <Keyboard className="h-4 w-4" />
-                  Keyboard Shortcuts
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleResetSection('shortcuts')}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset
-                </Button>
-              </div>
-
-              {shortcutSettings.value && (
-                <div className="space-y-4">
-                  {Object.entries(shortcutSettings.value).map(([action, shortcut]) => (
-                    <div key={action} className="space-y-2">
-                      <Label className="capitalize">
-                        {action.replace(/-/g, ' ')}
-                      </Label>
-                      <Input
-                        value={shortcut}
-                        onChange={(e) =>
-                          shortcutSettings.update({
-                            ...shortcutSettings.value,
-                            [action]: e.target.value
-                          })
-                        }
-                        placeholder="e.g., Ctrl+Shift+E"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="import-export" className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-medium mb-4">Export Settings</h3>
-                  <Button onClick={handleExportSettings}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Export All Settings
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Import Settings</h3>
-                  <Textarea
-                    placeholder="Paste exported settings JSON here..."
-                    value={importExportText}
-                    onChange={(e) => setImportExportText(e.target.value)}
-                    rows={10}
-                  />
-                  <Button
-                    onClick={handleImportSettings}
-                    disabled={!importExportText}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Import Settings
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          {saveStatus === 'saved' && (
-            <Alert className="mt-4">
-              <AlertDescription>Settings saved successfully!</AlertDescription>
-            </Alert>
+          {filteredHistory.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No analysis history found
+            </div>
           )}
+        </div>
+      </CardContent>
 
-          {saveStatus === 'error' && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription>Failed to save settings. Please try again.</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      {selectedResult && (
+        <AnalysisResultView result={selectedResult} />
+      )}
+    </Card>
   )
 }
-
-// Export all components
-export { SessionViewer } from './session-viewer'
-export { HistoryTimeline } from './history-timeline'
-export { SettingsEditor } from './settings-editor'
