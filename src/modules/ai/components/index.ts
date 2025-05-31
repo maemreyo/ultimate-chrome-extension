@@ -1,2 +1,2 @@
 // Export all components from the AI module
-export { default as AISettings } from './ai-settings';
+export { AISettings } from './ai-settings';

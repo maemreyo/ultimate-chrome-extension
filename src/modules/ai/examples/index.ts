@@ -1,2 +1,2 @@
 // Export example components
-export { default as AIDemo } from './ai-demo';
+export { AIDemo } from './ai-demo';
