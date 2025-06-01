@@ -29,3 +29,42 @@ export {
   getReadabilityLevel,
   isHighQualityContent
 } from "./quality-helpers"
+
+// DOM manipulation utilities
+export {
+  calculateReadingTime,
+  detectLanguage,
+  extractCleanText,
+  extractImages,
+  extractStructuredData,
+  extractTables,
+  findBestContentElement
+} from "./dom-helpers"
+
+// Readability analysis utilities
+export {
+  analyzeSentenceComplexity,
+  analyzeVocabulary,
+  calculateReadabilityMetrics,
+  getReadabilityRecommendations
+} from "./readability-helpers"
+
+// Performance monitoring utilities
+export {
+  BatchProcessor,
+  debounce,
+  ExtractionPerformanceMonitor,
+  getPerformanceRecommendations,
+  MemoryTracker,
+  PerformanceTimer,
+  throttle
+} from "./performance-helpers"
+
+// Cache optimization utilities
+export {
+  AdvancedLRUCache,
+  CacheAnalyzer,
+  CacheInvalidator,
+  CacheWarmer,
+  ContentFingerprinter
+} from "./cache-optimization-helpers"
