@@ -1,40 +1,55 @@
-// Updated: Enhanced with more providers and capabilities
+// Enhanced with more providers and capabilities
 
 // Base provider types
 export type AIProviderType =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'cohere'
-  | 'huggingface'
-  | 'replicate'
-  | 'stability'
-  | 'elevenlabs'
-  | 'whisper'
-  | 'custom'
-  | 'local'
+  | "openai"
+  | "anthropic"
+  | "google"
+  | "cohere"
+  | "huggingface"
+  | "replicate"
+  | "stability"
+  | "elevenlabs"
+  | "whisper"
+  | "custom"
+  | "local"
 
 export interface AIProvider {
   name: string
 
   // Text capabilities
   generateText?(prompt: string, options?: GenerateOptions): Promise<string>
-  generateStream?(prompt: string, options?: GenerateOptions): AsyncGenerator<string>
+  generateStream?(
+    prompt: string,
+    options?: GenerateOptions
+  ): AsyncGenerator<string>
   generateEmbedding?(text: string): Promise<number[]>
   classifyText?(text: string, labels: string[]): Promise<Classification>
   summarize?(text: string, options?: SummarizeOptions): Promise<string>
   analyzeSentiment?(text: string): Promise<SentimentAnalysis>
 
   // Image capabilities
-  generateImage?(prompt: string, options?: ImageGenerationOptions): Promise<ImageResult>
-  analyzeImage?(image: string | Blob, options?: ImageAnalysisOptions): Promise<ImageAnalysis>
+  generateImage?(
+    prompt: string,
+    options?: ImageGenerationOptions
+  ): Promise<ImageResult>
+  analyzeImage?(
+    image: string | Blob,
+    options?: ImageAnalysisOptions
+  ): Promise<ImageAnalysis>
 
   // Audio capabilities
-  transcribeAudio?(audio: Blob, options?: TranscriptionOptions): Promise<TranscriptionResult>
+  transcribeAudio?(
+    audio: Blob,
+    options?: TranscriptionOptions
+  ): Promise<TranscriptionResult>
   generateSpeech?(text: string, options?: SpeechOptions): Promise<Blob>
 
   // Code capabilities
-  generateCode?(prompt: string, options?: CodeGenerationOptions): Promise<CodeResult>
+  generateCode?(
+    prompt: string,
+    options?: CodeGenerationOptions
+  ): Promise<CodeResult>
   explainCode?(code: string, language?: string): Promise<string>
 }
 
@@ -61,7 +76,7 @@ export interface CacheConfig {
   enabled: boolean
   ttl: number // Time to live in seconds
   maxSize: number // Max cache size in MB
-  strategy: 'lru' | 'fifo' | 'lfu'
+  strategy: "lru" | "fifo" | "lfu"
 }
 
 export interface RateLimitConfig {
@@ -69,13 +84,13 @@ export interface RateLimitConfig {
   tokensPerMinute?: number
   requestsPerHour?: number
   tokensPerHour?: number
-  strategy: 'fixed-window' | 'sliding-window' | 'token-bucket'
+  strategy: "fixed-window" | "sliding-window" | "token-bucket"
 }
 
 export interface EncryptionConfig {
   enabled: boolean
-  algorithm: 'aes-256-gcm' | 'aes-256-cbc'
-  keyDerivation: 'pbkdf2' | 'argon2'
+  algorithm: "aes-256-gcm" | "aes-256-cbc"
+  keyDerivation: "pbkdf2" | "argon2"
 }
 
 // Text generation options
@@ -89,7 +104,7 @@ export interface GenerateOptions {
   stopSequences?: string[]
   systemPrompt?: string
   stream?: boolean
-  format?: 'text' | 'json' | 'markdown'
+  format?: "text" | "json" | "markdown"
 
   // Advanced options
   seed?: number
@@ -105,7 +120,7 @@ export interface FunctionDefinition {
 }
 
 export interface ResponseFormat {
-  type: 'text' | 'json_object'
+  type: "text" | "json_object"
   schema?: Record<string, any>
 }
 
@@ -117,7 +132,7 @@ export interface Classification {
 }
 
 export interface SentimentAnalysis {
-  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed'
+  sentiment: "positive" | "negative" | "neutral" | "mixed"
   score: number
   aspects?: AspectSentiment[]
 }
@@ -131,16 +146,16 @@ export interface AspectSentiment {
 export interface SummarizeOptions {
   maxLength?: number
   minLength?: number
-  style?: 'bullet' | 'paragraph' | 'tldr' | 'key-points' | 'executive'
+  style?: "bullet" | "paragraph" | "tldr" | "key-points" | "executive"
   language?: string
   extractive?: boolean
 }
 
 // Image generation
 export interface ImageGenerationOptions {
-  size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792'
-  style?: 'realistic' | 'artistic' | 'cartoon' | 'photographic'
-  quality?: 'standard' | 'hd'
+  size?: "256x256" | "512x512" | "1024x1024" | "1792x1024" | "1024x1792"
+  style?: "realistic" | "artistic" | "cartoon" | "photographic"
+  quality?: "standard" | "hd"
   n?: number
   negativePrompt?: string
   seed?: number
@@ -156,7 +171,14 @@ export interface ImageResult {
 }
 
 export interface ImageAnalysisOptions {
-  features?: ('objects' | 'faces' | 'text' | 'colors' | 'tags' | 'description')[]
+  features?: (
+    | "objects"
+    | "faces"
+    | "text"
+    | "colors"
+    | "tags"
+    | "description"
+  )[]
   language?: string
 }
 
@@ -186,7 +208,7 @@ export interface BoundingBox {
 export interface TranscriptionOptions {
   language?: string
   translateTo?: string
-  format?: 'text' | 'srt' | 'vtt' | 'json'
+  format?: "text" | "srt" | "vtt" | "json"
   timestamps?: boolean
   speakerDiarization?: boolean
 }
@@ -218,7 +240,7 @@ export interface SpeechOptions {
   speed?: number
   pitch?: number
   volume?: number
-  format?: 'mp3' | 'wav' | 'ogg'
+  format?: "mp3" | "wav" | "ogg"
   language?: string
   emotion?: string
 }
@@ -227,7 +249,7 @@ export interface SpeechOptions {
 export interface CodeGenerationOptions {
   language?: string
   framework?: string
-  style?: 'concise' | 'verbose' | 'documented'
+  style?: "concise" | "verbose" | "documented"
   includeTests?: boolean
   includeComments?: boolean
 }
@@ -280,7 +302,7 @@ export interface ErrorStats {
 // Hook options
 export interface UseAIOptions {
   providers?: AIProviderType[]
-  fallbackBehavior?: 'automatic' | 'manual' | 'none'
+  fallbackBehavior?: "automatic" | "manual" | "none"
   cacheEnabled?: boolean
   retryEnabled?: boolean
 }
@@ -288,7 +310,7 @@ export interface UseAIOptions {
 // Chat types
 export interface ChatMessage {
   id: string
-  role: 'user' | 'assistant' | 'system' | 'function'
+  role: "user" | "assistant" | "system" | "function"
   content: string
   timestamp: Date
 

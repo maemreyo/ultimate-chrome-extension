@@ -1,22 +1,22 @@
-// Updated: Enhanced AI service with multi-provider support and advanced features
+// Enhanced AI service with multi-provider support and advanced features
 
 import { Storage } from "@plasmohq/storage"
-import { AICache } from "./cache"
-import { AIRateLimiter } from "./rate-limiter"
-import { AIEncryption } from "./encryption"
 import { AIAnalytics } from "./analytics"
-import { createAIProvider } from "./utils/provider-factory"
+import { AICache } from "./cache"
+import { AIEncryption } from "./encryption"
+import { AIRateLimiter } from "./rate-limiter"
 import type {
   AIConfig,
   AIProvider,
   AIProviderType,
   AIUsageStats,
+  CodeGenerationOptions,
   GenerateOptions,
   ImageGenerationOptions,
-  TranscriptionOptions,
   SpeechOptions,
-  CodeGenerationOptions
+  TranscriptionOptions
 } from "./types"
+import { createAIProvider } from "./utils/provider-factory"
 
 export class AIService {
   private providers: Map<AIProviderType, AIProvider> = new Map()
@@ -53,9 +53,16 @@ export class AIService {
   private async initializeBuiltInProviders() {
     // Register all built-in providers
     const providerTypes: AIProviderType[] = [
-      'openai', 'anthropic', 'google', 'cohere',
-      'huggingface', 'replicate', 'stability',
-      'elevenlabs', 'whisper', 'local'
+      "openai",
+      "anthropic",
+      "google",
+      "cohere",
+      "huggingface",
+      "replicate",
+      "stability",
+      "elevenlabs",
+      "whisper",
+      "local"
     ]
 
     for (const type of providerTypes) {
@@ -136,7 +143,10 @@ export class AIService {
     await this.initializeProviders(config)
   }
 
-  async registerProvider(name: AIProviderType, providerClass: new (config: AIConfig) => AIProvider) {
+  async registerProvider(
+    name: AIProviderType,
+    providerClass: new (config: AIConfig) => AIProvider
+  ) {
     if (this.config) {
       const provider = new providerClass(this.config)
       this.providers.set(name, provider)
@@ -171,7 +181,11 @@ export class AIService {
       return result
     } catch (error) {
       errors.push(error as Error)
-      await this.analytics.trackError(this.config!.provider, capability, error as Error)
+      await this.analytics.trackError(
+        this.config!.provider,
+        capability,
+        error as Error
+      )
     }
 
     // Try fallback providers
@@ -185,38 +199,47 @@ export class AIService {
             return result
           } catch (error) {
             errors.push(error as Error)
-            await this.analytics.trackError(fallbackType, capability, error as Error)
+            await this.analytics.trackError(
+              fallbackType,
+              capability,
+              error as Error
+            )
           }
         }
       }
     }
 
     // All providers failed
-    throw new Error(`All providers failed: ${errors.map(e => e.message).join(', ')}`)
+    throw new Error(
+      `All providers failed: ${errors.map((e) => e.message).join(", ")}`
+    )
   }
 
   // Text generation methods
-  async generateText(prompt: string, options?: GenerateOptions): Promise<string> {
-    const cacheKey = this.cache.generateKey('generateText', prompt, options)
+  async generateText(
+    prompt: string,
+    options?: GenerateOptions
+  ): Promise<string> {
+    const cacheKey = this.cache.generateKey("generateText", prompt, options)
     const cached = await this.cache.get(cacheKey)
     if (cached) return cached as string
 
-    const result = await this.executeWithFallback(
-      async (provider) => {
-        if (!provider.generateText) {
-          throw new Error("Provider does not support text generation")
-        }
-        return provider.generateText(prompt, options)
-      },
-      'generateText'
-    )
+    const result = await this.executeWithFallback(async (provider) => {
+      if (!provider.generateText) {
+        throw new Error("Provider does not support text generation")
+      }
+      return provider.generateText(prompt, options)
+    }, "generateText")
 
     await this.cache.set(cacheKey, result)
-    await this.updateUsageStats(prompt.length + result.length, 'generateText')
+    await this.updateUsageStats(prompt.length + result.length, "generateText")
     return result
   }
 
-  async generateStream(prompt: string, options?: GenerateOptions): AsyncGenerator<string> {
+  async generateStream(
+    prompt: string,
+    options?: GenerateOptions
+  ): AsyncGenerator<string> {
     const provider = await this.getProvider()
     if (!provider.generateStream) {
       throw new Error("Provider does not support streaming")
@@ -233,7 +256,7 @@ export class AIService {
         totalLength += chunk.length
         yield chunk
       }
-      await service.updateUsageStats(totalLength, 'generateStream')
+      await service.updateUsageStats(totalLength, "generateStream")
     }
 
     return trackedStream(this)
@@ -241,93 +264,75 @@ export class AIService {
 
   // Image generation methods
   async generateImage(prompt: string, options?: ImageGenerationOptions) {
-    const cacheKey = this.cache.generateKey('generateImage', prompt, options)
+    const cacheKey = this.cache.generateKey("generateImage", prompt, options)
     const cached = await this.cache.get(cacheKey)
     if (cached) return cached
 
-    const result = await this.executeWithFallback(
-      async (provider) => {
-        if (!provider.generateImage) {
-          throw new Error("Provider does not support image generation")
-        }
-        return provider.generateImage(prompt, options)
-      },
-      'generateImage'
-    )
+    const result = await this.executeWithFallback(async (provider) => {
+      if (!provider.generateImage) {
+        throw new Error("Provider does not support image generation")
+      }
+      return provider.generateImage(prompt, options)
+    }, "generateImage")
 
     await this.cache.set(cacheKey, result)
-    await this.updateUsageStats(prompt.length * 10, 'generateImage') // Images cost more
+    await this.updateUsageStats(prompt.length * 10, "generateImage") // Images cost more
     return result
   }
 
   async analyzeImage(image: string | Blob, options?: any) {
-    return this.executeWithFallback(
-      async (provider) => {
-        if (!provider.analyzeImage) {
-          throw new Error("Provider does not support image analysis")
-        }
-        return provider.analyzeImage(image, options)
-      },
-      'analyzeImage'
-    )
+    return this.executeWithFallback(async (provider) => {
+      if (!provider.analyzeImage) {
+        throw new Error("Provider does not support image analysis")
+      }
+      return provider.analyzeImage(image, options)
+    }, "analyzeImage")
   }
 
   // Audio methods
   async transcribeAudio(audio: Blob, options?: TranscriptionOptions) {
-    return this.executeWithFallback(
-      async (provider) => {
-        if (!provider.transcribeAudio) {
-          throw new Error("Provider does not support audio transcription")
-        }
-        return provider.transcribeAudio(audio, options)
-      },
-      'transcribeAudio'
-    )
+    return this.executeWithFallback(async (provider) => {
+      if (!provider.transcribeAudio) {
+        throw new Error("Provider does not support audio transcription")
+      }
+      return provider.transcribeAudio(audio, options)
+    }, "transcribeAudio")
   }
 
   async generateSpeech(text: string, options?: SpeechOptions) {
-    const cacheKey = this.cache.generateKey('generateSpeech', text, options)
+    const cacheKey = this.cache.generateKey("generateSpeech", text, options)
     const cached = await this.cache.get(cacheKey)
     if (cached) return cached as Blob
 
-    const result = await this.executeWithFallback(
-      async (provider) => {
-        if (!provider.generateSpeech) {
-          throw new Error("Provider does not support speech generation")
-        }
-        return provider.generateSpeech(text, options)
-      },
-      'generateSpeech'
-    )
+    const result = await this.executeWithFallback(async (provider) => {
+      if (!provider.generateSpeech) {
+        throw new Error("Provider does not support speech generation")
+      }
+      return provider.generateSpeech(text, options)
+    }, "generateSpeech")
 
     await this.cache.set(cacheKey, result)
-    await this.updateUsageStats(text.length * 2, 'generateSpeech')
+    await this.updateUsageStats(text.length * 2, "generateSpeech")
     return result
   }
 
   // Code generation methods
   async generateCode(prompt: string, options?: CodeGenerationOptions) {
-    return this.executeWithFallback(
-      async (provider) => {
-        if (!provider.generateCode) {
-          throw new Error("Provider does not support code generation")
-        }
-        return provider.generateCode(prompt, options)
-      },
-      'generateCode'
-    )
+    return this.executeWithFallback(async (provider) => {
+      if (!provider.generateCode) {
+        throw new Error("Provider does not support code generation")
+      }
+      return provider.generateCode(prompt, options)
+    }, "generateCode")
   }
 
   async explainCode(code: string, language?: string) {
-    return this.executeWithFallback(
-      async (provider) => {
-        if (!provider.explainCode) {
-          throw new Error("Provider does not support code explanation")
-        }
-        return provider.explainCode(code, language)
-      },
-      'explainCode'
-    )
+    return this.executeWithFallback(async (provider) => {
+      if (!provider.explainCode) {
+        throw new Error("Provider does not support code explanation")
+      }
+      return provider.explainCode(code, language)
+    }, "explainCode")
   }
 
   // Original methods maintained for backward compatibility
@@ -338,7 +343,7 @@ export class AIService {
     }
 
     const result = await provider.summarize(text, options)
-    await this.updateUsageStats(text.length + result.length, 'summarize')
+    await this.updateUsageStats(text.length + result.length, "summarize")
     return result
   }
 
@@ -349,7 +354,7 @@ export class AIService {
     }
 
     const result = await provider.classifyText(text, labels)
-    await this.updateUsageStats(text.length, 'classifyText')
+    await this.updateUsageStats(text.length, "classifyText")
     return result
   }
 
@@ -360,15 +365,15 @@ export class AIService {
     }
 
     const result = await provider.generateEmbedding(text)
-    await this.updateUsageStats(text.length, 'generateEmbedding')
+    await this.updateUsageStats(text.length, "generateEmbedding")
     return result
   }
 
   // Usage tracking methods
   private async updateUsageStats(estimatedTokens: number, capability: string) {
     const tokens = Math.ceil(estimatedTokens / 4)
-    const provider = this.config?.provider || 'local'
-    const model = this.config?.model || 'default'
+    const provider = this.config?.provider || "local"
+    const model = this.config?.model || "default"
 
     this.usageStats.tokensUsed += tokens
     this.usageStats.requestsCount += 1
@@ -386,10 +391,14 @@ export class AIService {
     }
     this.usageStats.byProvider[provider].requests += 1
     this.usageStats.byProvider[provider].tokens += tokens
-    this.usageStats.byProvider[provider].cost += this.calculateCost(tokens, provider)
+    this.usageStats.byProvider[provider].cost += this.calculateCost(
+      tokens,
+      provider
+    )
 
     // Update by capability
-    this.usageStats.byCapability[capability] = (this.usageStats.byCapability[capability] || 0) + 1
+    this.usageStats.byCapability[capability] =
+      (this.usageStats.byCapability[capability] || 0) + 1
 
     await this.storage.set("ai_usage_stats", this.usageStats)
   }
@@ -397,7 +406,7 @@ export class AIService {
   private calculateCost(tokens: number, provider: string): number {
     const costPerToken: Record<string, number> = {
       openai: 0.000002,
-      'openai-gpt4': 0.00003,
+      "openai-gpt4": 0.00003,
       anthropic: 0.000008,
       google: 0.000001,
       cohere: 0.0000015,
