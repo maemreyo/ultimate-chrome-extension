@@ -1,329 +1,369 @@
-# AI/ML Integration Module
+# AI/ML Integration Module - Enhanced Edition
 
-A comprehensive AI module for Chrome extensions that supports multiple providers, custom API keys, and various AI capabilities.
+A comprehensive AI module for Chrome extensions that supports multiple providers, custom API keys, and various AI capabilities with production-ready enhancements.
 
-## Features
+## 🚀 New Enhanced Features
 
-- **Multiple AI Providers**: OpenAI, Anthropic, Google AI, Cohere, HuggingFace, Replicate, and more
-- **Custom API Keys**: Users can easily configure their own API keys
-- **Self-hosted Models**: Support for custom endpoints and local models
-- **Diverse Capabilities**:
-  - Text generation and completion
-  - Chat conversations with context
-  - Text summarization (bullet points, paragraphs, TL;DR)
-  - Text classification and sentiment analysis
-  - Embeddings generation
-  - Image generation (DALL-E, Stable Diffusion)
-  - Speech-to-text transcription
-  - Text-to-speech synthesis
-  - Vision/image analysis
-  - Code generation and analysis
-- **Advanced Features**:
-  - Streaming responses
-  - Response caching
-  - Rate limiting and quota management
-  - API key encryption
-  - Multiple API keys per provider
-  - Automatic failover between providers
-  - Usage analytics and cost tracking
+### 1. **Intelligent Retry Mechanism**
 
-## Installation
+- Exponential backoff with jitter
+- Configurable retry conditions
+- Smart error categorization
+
+### 2. **Request Queue Management**
+
+- Priority-based processing
+- Concurrency control
+- Real-time queue monitoring
+
+### 3. **Token & Cost Optimization**
+
+- Accurate token counting per model
+- Automatic provider selection based on cost/quality
+- Budget tracking and alerts
+
+### 4. **Context Window Management**
+
+- Smart compression strategies
+- Importance-based message retention
+- Sliding window with token limits
+
+### 5. **Performance Monitoring**
+
+- Real-time latency tracking
+- Memory usage analysis
+- Performance trend detection
+
+### 6. **Advanced Error Handling**
+
+- User-friendly error messages
+- Actionable recommendations
+- Automatic error categorization
+
+### 7. **Debug Mode**
+
+- Comprehensive request/response logging
+- Performance bottleneck detection
+- Export functionality
+
+## 📦 Installation
 
 ```typescript
 // src/options/index.tsx
 import { AIProvider } from "~modules/ai"
-import { AISettings } from "~modules/ai/components/ai-settings"
+import { AISettings, AIDebugPanel } from "~modules/ai/components"
 
 function OptionsPage() {
   return (
     <AIProvider>
       <AISettings />
+      {process.env.NODE_ENV === 'development' && <AIDebugPanel />}
     </AIProvider>
   )
 }
 ```
 
-## Quick Start
+## 🎯 Quick Start with Enhanced Features
 
-### Basic Text Generation
+### Basic Enhanced Usage
 
 ```typescript
-import { useAI } from "~modules/ai/hooks/useAI"
+import { useEnhancedAI } from "~modules/ai/hooks"
 
 function MyComponent() {
-  const { generateText } = useAI()
-
-  const handleGenerate = async () => {
-    const result = await generateText("Write a haiku about browser extensions")
-    console.log(result)
-  }
-}
-```
-
-### Chat Interface
-
-```typescript
-import { useAIChat } from "~modules/ai/hooks/useAIChat"
-
-function ChatComponent() {
-  const { messages, sendMessage } = useAIChat()
-
-  const handleSend = async (message: string) => {
-    await sendMessage(message)
-  }
-
-  return (
-    <div>
-      {messages.map(msg => (
-        <div key={msg.id}>{msg.content}</div>
-      ))}
-    </div>
-  )
-}
-```
-
-### Image Generation
-
-```typescript
-import { useAI } from "~modules/ai/hooks/useAI"
-
-function ImageGenerator() {
-  const { generateImage } = useAI()
-
-  const handleGenerate = async () => {
-    const imageUrl = await generateImage("A futuristic city at sunset", {
-      size: "1024x1024",
-      style: "realistic"
+  const { generateText, generateWithOptimization, queueStatus, performance } =
+    useEnhancedAI({
+      enableDebug: true,
+      autoOptimize: true,
+      performanceTracking: true
     })
+
+  const handleGenerate = async () => {
+    // Automatic optimization based on requirements
+    const result = await generateWithOptimization("Your prompt", {
+      maxCost: 0.05, // Maximum $0.05 per request
+      minQuality: 0.85, // Minimum quality score
+      maxLatency: 3000 // Maximum 3 seconds
+    })
+
+    console.log("Result:", result)
+    console.log("Queue:", queueStatus)
+    console.log("Performance:", performance)
   }
 }
 ```
 
-### Using Custom API Keys
-
-Users can configure their own API keys through the settings interface:
+### Cost-Aware Generation
 
 ```typescript
-import { AISettings } from "~modules/ai/components/ai-settings"
+import { useAICost } from "~modules/ai/hooks"
 
-// In your options/settings page
-<AISettings />
-```
+function BudgetAwareComponent() {
+  const { estimateCost, totalSpent, setBudget, recommendations } = useAICost()
 
-Or programmatically:
+  // Set monthly budget
+  setBudget(50) // $50/month
 
-```typescript
-import { aiService } from "~modules/ai"
+  const handleGenerate = async (prompt: string) => {
+    // Get cost estimates before generating
+    const estimates = await estimateCost(prompt)
 
-await aiService.configure({
-  provider: "openai",
-  apiKey: "sk-...",
-  model: "gpt-4-turbo"
-})
-```
+    // Show estimates to user
+    console.log("Estimated costs:", estimates)
+    console.log("Total spent this month:", totalSpent)
+    console.log("Budget recommendations:", recommendations)
 
-### Multiple Providers with Failover
+    // Use cheapest option that meets quality requirements
+    const suitable = estimates
+      .filter((e) => e.recommendation !== "Expensive")
+      .sort((a, b) => a.estimatedCost - b.estimatedCost)[0]
 
-```typescript
-import { useAI } from "~modules/ai/hooks/useAI"
-
-function RobustComponent() {
-  const { generateText } = useAI({
-    providers: ['openai', 'anthropic', 'cohere'],
-    fallbackBehavior: 'automatic'
-  })
-
-  // Will automatically try next provider if one fails
-  const result = await generateText("Your prompt")
-}
-```
-
-### Streaming Responses
-
-```typescript
-import { useAI } from "~modules/ai/hooks/useAI"
-
-function StreamingComponent() {
-  const { generateStream } = useAI()
-
-  const handleStream = async () => {
-    const stream = await generateStream("Tell me a story")
-
-    for await (const chunk of stream) {
-      console.log(chunk) // Partial response
+    if (suitable) {
+      await generateText(prompt, {
+        provider: suitable.provider,
+        model: suitable.model
+      })
     }
   }
 }
 ```
 
-### Custom Endpoints
+### Context Management for Long Conversations
 
 ```typescript
-await aiService.configure({
-  provider: "custom",
-  baseUrl: "https://your-api.com/v1",
-  apiKey: "your-key",
-  headers: {
-    "X-Custom-Header": "value"
+import { useAIContext } from "~modules/ai/hooks"
+
+function ChatWithMemory() {
+  const { messages, addMessage, contextStats } = useAIContext(
+    "chat-session-1",
+    {
+      maxTokens: 8000,
+      model: "gpt-4",
+      compressionStrategy: "importance"
+    }
+  )
+
+  const sendMessage = async (content: string) => {
+    // Add user message
+    await addMessage({
+      id: Date.now().toString(),
+      role: "user",
+      content,
+      timestamp: new Date()
+    })
+
+    // Context is automatically managed
+    console.log("Context stats:", contextStats)
+    // { messageCount: 50, totalTokens: 7800, compressionApplied: true }
+
+    // Generate response with managed context
+    const response = await generateText(content, {
+      messages // Automatically compressed messages
+    })
   }
-})
+}
 ```
 
-## API Reference
-
-### Hooks
-
-#### `useAI(options?)`
-
-Main hook for AI operations.
+### Performance Monitoring
 
 ```typescript
-const {
-  // Text operations
-  generateText,
-  generateStream,
-  summarize,
-  classifyText,
-  analyzeSentiment,
+import { useAIPerformance } from "~modules/ai/hooks"
 
-  // Embeddings
-  generateEmbedding,
-  findSimilar,
+function PerformanceAwareComponent() {
+  const { metrics, measureOperation, startMonitoring } = useAIPerformance()
 
-  // Images
-  generateImage,
-  analyzeImage,
+  // Start monitoring
+  startMonitoring()
 
-  // Audio
-  transcribeAudio,
-  generateSpeech,
+  const analyzeContent = async (content: string) => {
+    // Measure specific operation
+    const result = await measureOperation("content-analysis", async () => {
+      return await generateText(`Analyze: ${content}`)
+    })
 
-  // Code
-  generateCode,
-  explainCode,
+    console.log("Performance metrics:", metrics)
+    // {
+    //   averageLatency: 1234,
+    //   throughput: 150,
+    //   memoryUsage: 45000000,
+    //   trends: 'stable',
+    //   recommendations: ['Consider caching frequent requests']
+    // }
 
-  // State
-  loading,
-  error,
-  usage
-} = useAI(options)
-```
-
-#### `useAIChat(options?)`
-
-Hook for chat conversations.
-
-```typescript
-const {
-  messages,
-  sendMessage,
-  streamMessage,
-  editMessage,
-  deleteMessage,
-  clearMessages,
-  loading,
-  error
-} = useAIChat({
-  systemPrompt: "You are a helpful assistant",
-  model: "gpt-4",
-  temperature: 0.7
-})
-```
-
-### Configuration
-
-#### Provider Configuration
-
-```typescript
-interface AIConfig {
-  provider: AIProviderType
-  apiKey?: string
-  apiKeys?: Record<string, string> // Multiple keys
-  model?: string
-  baseUrl?: string
-  headers?: Record<string, string>
-
-  // Advanced options
-  maxRetries?: number
-  timeout?: number
-  cache?: CacheConfig
-  rateLimit?: RateLimitConfig
-  encryption?: EncryptionConfig
+    return result
+  }
 }
 ```
 
-#### Supported Providers
-
-- `openai` - OpenAI (GPT-4, GPT-3.5, DALL-E)
-- `anthropic` - Anthropic (Claude)
-- `google` - Google AI (Gemini, PaLM)
-- `cohere` - Cohere
-- `huggingface` - HuggingFace
-- `replicate` - Replicate
-- `stability` - Stability AI
-- `elevenlabs` - ElevenLabs (TTS)
-- `whisper` - OpenAI Whisper (STT)
-- `custom` - Custom endpoints
-- `local` - Local models
-
-## Advanced Usage
-
-### Rate Limiting
+## 🛠️ Configuration Presets
 
 ```typescript
-await aiService.configure({
-  rateLimit: {
-    requestsPerMinute: 60,
-    tokensPerMinute: 90000,
-    strategy: "sliding-window"
+import { AIPresets, configureAI } from "~modules/ai"
+
+// Cost-optimized configuration
+await configureAI(AIPresets.costOptimized)
+
+// Performance-optimized configuration
+await configureAI(AIPresets.performanceOptimized)
+
+// Quality-optimized configuration
+await configureAI(AIPresets.qualityOptimized)
+
+// Development configuration with mocks
+await configureAI(AIPresets.development)
+```
+
+## 🧪 Testing
+
+```typescript
+import { AITestingUtils } from "~modules/ai/utils"
+
+describe("AI Feature", () => {
+  const testUtils = new AITestingUtils()
+
+  beforeEach(async () => {
+    await testUtils.setupMockProvider({
+      mockResponses: {
+        "test prompt": "mock response"
+      },
+      delay: 100
+    })
+  })
+
+  afterEach(async () => {
+    await testUtils.resetMockProvider()
+  })
+
+  it("should handle rate limits", async () => {
+    await testUtils.simulateRateLimit()
+
+    // Test will automatically retry with backoff
+    const result = await generateText("test")
+    expect(result).toBeDefined()
+  })
+})
+```
+
+## 📊 Debug Panel
+
+The AI Debug Panel provides real-time insights:
+
+```typescript
+import { AIDebugPanel } from "~modules/ai/components"
+
+// Add to your dev tools
+<AIDebugPanel />
+```
+
+Features:
+
+- Request/response logs
+- Performance metrics
+- Queue visualization
+- Error tracking
+- Export functionality
+
+## ⚡ Performance Best Practices
+
+1. **Enable Intelligent Caching**
+
+   ```typescript
+   cache: { enabled: true, ttl: 3600, strategy: 'lru' }
+   ```
+
+2. **Use Request Prioritization**
+
+   ```typescript
+   const { generateText } = useEnhancedAI({
+     queuePriority: RequestQueue.PRIORITY.HIGH
+   })
+   ```
+
+3. **Implement Cost Budgets**
+
+   ```typescript
+   const { setBudget } = useAICost()
+   setBudget(100) // $100 monthly limit
+   ```
+
+4. **Monitor Performance Trends**
+
+   ```typescript
+   const stats = enhancedAIService.getPerformanceStats()
+   if (stats.trends.trend === "degrading") {
+     // Take action
+   }
+   ```
+
+5. **Use Context Compression**
+   ```typescript
+   const { messages } = useAIContext("chat", {
+     compressionStrategy: "importance",
+     maxTokens: 4000
+   })
+   ```
+
+## 🔒 Security Features
+
+- API key encryption with AES-256-GCM
+- Secure token storage
+- Request sanitization
+- Debug log filtering
+
+## 📈 Analytics & Insights
+
+The module provides comprehensive analytics:
+
+```typescript
+const analytics = await enhancedAIService.getUsageStats()
+console.log({
+  totalTokens: analytics.tokensUsed,
+  totalCost: analytics.costEstimate,
+  byProvider: analytics.byProvider,
+  errorRate: analytics.errors.length / analytics.requestsCount
+})
+```
+
+## 🚀 Advanced Use Cases
+
+### Batch Processing with Progress
+
+```typescript
+const { generateBatch } = useEnhancedAI()
+
+const prompts = ["prompt1", "prompt2", "prompt3"]
+const results = await generateBatch(prompts, {
+  onProgress: (completed, total) => {
+    console.log(`Progress: ${completed}/${total}`)
   }
 })
 ```
 
-### Caching
+### Multi-Provider Fallback
 
 ```typescript
-await aiService.configure({
-  cache: {
-    enabled: true,
-    ttl: 3600, // 1 hour
-    maxSize: 100, // MB
-    strategy: "lru"
-  }
+await configureAI({
+  provider: "openai",
+  fallbackProviders: ["anthropic", "google"]
+  // Automatic fallback on failure
 })
 ```
 
-### Custom Provider
+### Stream Processing with Error Recovery
 
 ```typescript
-import { AIProvider } from "~modules/ai/types"
+const stream = generateStream(prompt)
 
-class MyCustomProvider implements AIProvider {
-  async generateText(prompt: string, options?: GenerateOptions) {
-    // Your implementation
+try {
+  for await (const chunk of stream) {
+    // Process chunk
+  }
+} catch (error) {
+  if (error.isRetryable) {
+    // Automatic retry with backoff
   }
 }
-
-aiService.registerProvider("my-provider", MyCustomProvider)
 ```
-
-## Best Practices
-
-1. **API Key Security**: Always use the encrypted storage option for API keys
-2. **Rate Limiting**: Configure appropriate rate limits to avoid API quota issues
-3. **Error Handling**: Always handle errors gracefully with fallback options
-4. **Caching**: Enable caching for frequently used prompts
-5. **Cost Management**: Monitor usage through the built-in analytics
-
-## Examples
-
-See the `examples` directory for complete examples:
-
-- Text generation and chat
-- Image generation gallery
-- Voice assistant
-- Code helper
-- Document analyzer
 
 ## License
 
