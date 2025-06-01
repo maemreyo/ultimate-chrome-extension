@@ -1,5 +1,3 @@
-// UPDATED: Added missing imports and fixed integration
-
 import { AIService } from "./ai-service"
 import {
   ConnectionPool,
