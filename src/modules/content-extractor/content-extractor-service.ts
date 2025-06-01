@@ -1,4 +1,5 @@
 // src/modules/content-extractor/content-extractor-service.ts
+// Enhanced version with all missing methods and improvements
 
 import { Storage } from "@plasmohq/storage"
 import { TextExtractor } from "./text-extractor"
@@ -60,6 +61,45 @@ class LRUCache<K, V> {
   size(): number {
     return this.cache.size
   }
+
+  has(key: K): boolean {
+    return this.cache.has(key)
+  }
+}
+
+// Rate limiter implementation
+class RateLimiter {
+  private requests: Map<string, number[]> = new Map()
+  private maxRequests: number
+  private windowMs: number
+
+  constructor(maxRequests: number = 10, windowMs: number = 60000) {
+    this.maxRequests = maxRequests
+    this.windowMs = windowMs
+  }
+
+  async checkLimit(key: string): Promise<boolean> {
+    const now = Date.now()
+    const requests = this.requests.get(key) || []
+
+    // Remove old requests outside window
+    const validRequests = requests.filter((time) => now - time < this.windowMs)
+
+    if (validRequests.length >= this.maxRequests) {
+      return false
+    }
+
+    validRequests.push(now)
+    this.requests.set(key, validRequests)
+    return true
+  }
+
+  getRemainingRequests(key: string): number {
+    const now = Date.now()
+    const requests = this.requests.get(key) || []
+    const validRequests = requests.filter((time) => now - time < this.windowMs)
+    return Math.max(0, this.maxRequests - validRequests.length)
+  }
 }
 
 export class ContentExtractorService {
@@ -79,12 +119,17 @@ export class ContentExtractorService {
   }
   private cacheOptions: CacheOptions
   private pendingExtractions: Map<string, Promise<ExtractedContent>> = new Map()
+  private rateLimiter: RateLimiter
+  private cacheHits: number = 0
+  private cacheMisses: number = 0
 
   constructor(cacheOptions?: Partial<CacheOptions>) {
     this.extractor = new TextExtractor()
     this.storage = new Storage({ area: "local" })
     this.cacheOptions = { ...this.defaultCacheOptions, ...cacheOptions }
     this.cache = new LRUCache(100) // 100 items max
+    this.rateLimiter = new RateLimiter()
+
     if (this.cacheOptions.persistent) {
       this.loadCache()
     }
@@ -103,6 +148,10 @@ export class ContentExtractorService {
     this.plugins = this.plugins.filter((p) => p.name !== pluginName)
   }
 
+  getPlugins(): ContentExtractorPlugin[] {
+    return [...this.plugins]
+  }
+
   // Enhanced extraction with error handling and events
   async extract(
     url: string,
@@ -110,6 +159,12 @@ export class ContentExtractorService {
     events?: ExtractionEvents
   ): Promise<ExtractionResult> {
     try {
+      // Rate limiting
+      const domain = new URL(url).hostname
+      if (!(await this.rateLimiter.checkLimit(domain))) {
+        throw new Error(`Rate limit exceeded for ${domain}. Try again later.`)
+      }
+
       events?.onStart?.()
 
       // Check if extraction is already in progress
@@ -140,6 +195,84 @@ export class ContentExtractorService {
     }
   }
 
+  // Extract from current tab
+  async extractFromCurrentTab(
+    options?: ExtractionOptions,
+    events?: ExtractionEvents
+  ): Promise<ExtractionResult> {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true
+      })
+      if (!tab || !tab.id) {
+        throw new Error("No active tab found")
+      }
+      return this.extractFromTab(tab.id, options, events)
+    } catch (error) {
+      return { success: false, error: error as Error }
+    }
+  }
+
+  // Extract from DOM Document
+  async extractFromDocument(
+    document: Document,
+    url: string,
+    options?: ExtractionOptions,
+    events?: ExtractionEvents
+  ): Promise<ExtractionResult> {
+    try {
+      events?.onStart?.()
+      events?.onProgress?.({ phase: "extracting", progress: 50 })
+
+      let doc = document
+
+      // Apply plugin pre-processors
+      for (const plugin of this.plugins) {
+        if (plugin.beforeExtract) {
+          doc = plugin.beforeExtract(doc, options || {})
+        }
+      }
+
+      let content = await this.extractor.extractEnhanced(doc, url, options)
+
+      // Apply plugin post-processors
+      for (const plugin of this.plugins) {
+        if (plugin.afterExtract) {
+          content = plugin.afterExtract(content)
+        }
+      }
+
+      // Generate fingerprint
+      content.fingerprint = this.generateFingerprint(content)
+
+      events?.onComplete?.(content)
+      return { success: true, data: content }
+    } catch (error) {
+      events?.onError?.(error as Error)
+      return { success: false, error: error as Error }
+    }
+  }
+
+  // Extract from HTML string
+  async extractFromHTML(
+    html: string,
+    url: string,
+    options?: ExtractionOptions,
+    events?: ExtractionEvents
+  ): Promise<ExtractionResult> {
+    try {
+      events?.onStart?.()
+      events?.onProgress?.({ phase: "parsing", progress: 20 })
+
+      const doc = new DOMParser().parseFromString(html, "text/html")
+      return this.extractFromDocument(doc, url, options, events)
+    } catch (error) {
+      events?.onError?.(error as Error)
+      return { success: false, error: error as Error }
+    }
+  }
+
   private async _extract(
     url: string,
     options?: ExtractionOptions,
@@ -149,6 +282,7 @@ export class ContentExtractorService {
     if (this.cacheOptions.enabled) {
       const cached = await this.getFromCache(url, options)
       if (cached) {
+        this.cacheHits++
         events?.onProgress?.({
           phase: "fetching",
           progress: 100,
@@ -156,6 +290,7 @@ export class ContentExtractorService {
         })
         return cached
       }
+      this.cacheMisses++
     }
 
     // Fetch content
@@ -253,15 +388,108 @@ export class ContentExtractorService {
         await this.waitForLazyContent(tabId, options.waitForSelectors)
       }
 
-      const doc = new DOMParser().parseFromString(html, "text/html")
-      const content = await this.extractor.extractEnhanced(doc, url, options)
-
-      events?.onComplete?.(content)
-      return { success: true, data: content }
+      return this.extractFromHTML(html, url, options, events)
     } catch (error) {
       events?.onError?.(error as Error)
       return { success: false, error: error as Error }
     }
+  }
+
+  // Export/Import functionality
+  async exportContent(
+    content: ExtractedContent,
+    format: "json" | "markdown" | "html" = "json"
+  ): Promise<string> {
+    switch (format) {
+      case "markdown":
+        return this.contentToMarkdown(content)
+      case "html":
+        return this.contentToHTML(content)
+      default:
+        return JSON.stringify(content, null, 2)
+    }
+  }
+
+  async importContent(
+    data: string,
+    format: "json" | "markdown" | "html" = "json"
+  ): Promise<ExtractedContent> {
+    switch (format) {
+      case "json":
+        return JSON.parse(data)
+      default:
+        throw new Error(`Import format ${format} not yet supported`)
+    }
+  }
+
+  private contentToMarkdown(content: ExtractedContent): string {
+    let markdown = `# ${content.title}\n\n`
+
+    if (content.metadata.author) {
+      markdown += `**Author:** ${content.metadata.author}\n`
+    }
+    if (content.metadata.publishDate) {
+      markdown += `**Published:** ${new Date(content.metadata.publishDate).toLocaleDateString()}\n`
+    }
+    markdown += `\n---\n\n`
+
+    // Add sections and paragraphs
+    if (content.sections.length > 0) {
+      content.sections.forEach((section) => {
+        markdown += `${"#".repeat(section.level)} ${section.title}\n\n`
+        section.paragraphs.forEach((p) => {
+          markdown += `${p.text}\n\n`
+        })
+      })
+    } else {
+      content.paragraphs.forEach((p) => {
+        if (p.isHeading) {
+          markdown += `${"#".repeat(p.headingLevel || 2)} ${p.text}\n\n`
+        } else if (p.isQuote) {
+          markdown += `> ${p.text}\n\n`
+        } else if (p.isCode) {
+          markdown += `\`\`\`\n${p.text}\n\`\`\`\n\n`
+        } else {
+          markdown += `${p.text}\n\n`
+        }
+      })
+    }
+
+    return markdown
+  }
+
+  private contentToHTML(content: ExtractedContent): string {
+    let html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${content.title}</title>
+</head>
+<body>
+  <article>
+    <h1>${content.title}</h1>`
+
+    if (content.metadata.author || content.metadata.publishDate) {
+      html += '<div class="metadata">'
+      if (content.metadata.author) {
+        html += `<span class="author">By ${content.metadata.author}</span>`
+      }
+      if (content.metadata.publishDate) {
+        html += `<time>${new Date(content.metadata.publishDate).toLocaleDateString()}</time>`
+      }
+      html += "</div>"
+    }
+
+    content.paragraphs.forEach((p) => {
+      html += p.html + "\n"
+    })
+
+    html += `
+  </article>
+</body>
+</html>`
+
+    return html
   }
 
   // Cache management
@@ -387,6 +615,9 @@ export class ContentExtractorService {
   // Cache management methods
   async clearCache(): Promise<void> {
     this.cache.clear()
+    this.cacheHits = 0
+    this.cacheMisses = 0
+
     if (this.cacheOptions.persistent) {
       const keys = await this.storage.getAll()
       const cacheKeys = Object.keys(keys).filter((k) => k.startsWith("cache_"))
@@ -394,10 +625,29 @@ export class ContentExtractorService {
     }
   }
 
-  getCacheStats(): { size: number; hitRate: number } {
+  getCacheStats(): {
+    size: number
+    hitRate: number
+    hits: number
+    misses: number
+    itemCount: number
+  } {
+    const total = this.cacheHits + this.cacheMisses
     return {
       size: this.cache.size(),
-      hitRate: 0 // Would need to track hits/misses for this
+      hitRate: total > 0 ? this.cacheHits / total : 0,
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      itemCount: this.cache.size()
+    }
+  }
+
+  // Rate limit info
+  getRateLimitInfo(url: string): { remaining: number; resetTime: number } {
+    const domain = new URL(url).hostname
+    return {
+      remaining: this.rateLimiter.getRemainingRequests(domain),
+      resetTime: Date.now() + 60000 // 1 minute window
     }
   }
 
@@ -425,6 +675,35 @@ export class ContentExtractorService {
     }
 
     return duplicates
+  }
+
+  // Validate extracted content
+  validateContent(content: ExtractedContent): {
+    valid: boolean
+    errors: string[]
+  } {
+    const errors: string[] = []
+
+    if (!content.title || content.title.length === 0) {
+      errors.push("Missing title")
+    }
+
+    if (!content.paragraphs || content.paragraphs.length === 0) {
+      errors.push("No paragraphs extracted")
+    }
+
+    if (content.wordCount < 50) {
+      errors.push("Content too short (less than 50 words)")
+    }
+
+    if (content.quality.score < 0.3) {
+      errors.push("Content quality too low")
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    }
   }
 
   private async loadCache(): Promise<void> {
