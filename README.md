@@ -1,683 +1,397 @@
-# 🚀 Ultimate Chrome Extension Template
+// README.md
 
-> **The most comprehensive Chrome Extension template with modern tech stack, premium features, and enterprise-ready architecture**
+# 🚀 Ultimate AI Chrome Extension
+
+> **The most comprehensive AI-powered Chrome Extension with advanced content extraction, analysis, and storage capabilities**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
-[![Stripe](https://img.shields.io/badge/Stripe-626CD9?style=for-the-badge&logo=Stripe&logoColor=white)](https://stripe.com/)
-
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Core Concepts](#core-concepts)
-- [Development Guide](#development-guide)
-- [Monetization](#monetization)
-- [Deployment](#deployment)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
-- [Resources](#resources)
 
 ## 🎯 Overview
 
-This template is designed for developers who want to build **professional, scalable, and monetizable Chrome extensions**. It includes everything you need:
+This is a production-ready Chrome extension template that integrates four powerful modules:
 
-- 🔐 **Authentication** (Supabase + Google OAuth)
-- 💳 **Payments** (Stripe subscriptions)
-- 💾 **Database** (Supabase with RLS)
-- 🎨 **Modern UI** (Tailwind + Radix UI)
-- 📊 **Analytics** (Google Analytics + Custom)
-- 🔄 **Real-time sync** (Supabase Realtime)
-- 🚀 **Performance optimized**
-- 📱 **Cross-browser support**
+- **[@matthew.ngo/ai-toolkit](https://github.com/matthew.ngo/ai-toolkit)** - Multi-provider AI integration
+- **[@matthew.ngo/chrome-storage](https://github.com/matthew.ngo/chrome-storage)** - Advanced storage with encryption
+- **[@matthew.ngo/content-extractor](https://github.com/matthew.ngo/content-extractor)** - Intelligent content extraction
+- **[@matthew.ngo/analysis-toolkit](https://github.com/matthew.ngo/analysis-toolkit)** - Comprehensive content analysis
 
-## ✨ Features
+## ✨ Key Features
 
-### Core Extension Features
-- ✅ **Manifest V3** - Latest Chrome extension standard
-- ✅ **Background Service Worker** - Persistent background tasks
-- ✅ **Content Scripts** - Page manipulation with React
-- ✅ **Popup UI** - Beautiful extension popup
-- ✅ **Options Page** - Full settings management
-- ✅ **Side Panel** - Chrome 114+ side panel support
-- ✅ **New Tab Override** - Custom new tab page
-- ✅ **Context Menus** - Right-click actions
-- ✅ **Notifications** - Browser notifications
-- ✅ **Storage** - Local/Sync/Secure storage
-- ✅ **Messaging** - Type-safe message passing
+### 🤖 AI Integration
 
-### Premium Features
-- 💰 **Stripe Integration** - Subscription management
-- 🔐 **Supabase Auth** - Email/Password + OAuth
-- 📊 **Analytics Dashboard** - User insights
-- 🔄 **Real-time Sync** - Cross-device sync
-- 🎯 **User Segmentation** - Free/Pro/Premium tiers
-- 📧 **Email Integration** - Transactional emails
-- 🔔 **Push Notifications** - Engagement features
-- 📈 **Usage Tracking** - Monitor API limits
+- **Multi-Provider Support**: OpenAI, Anthropic, Google AI
+- **Smart Caching**: Reduce API costs with intelligent response caching
+- **Rate Limiting**: Automatic rate limiting and retry logic
+- **Usage Tracking**: Monitor tokens, requests, and costs
 
-### Developer Experience
-- 🔥 **Hot Reload** - Instant feedback
-- 📝 **TypeScript** - Full type safety
-- 🧪 **Testing** - Jest + React Testing Library
-- 📦 **Auto Build** - GitHub Actions
-- 🚀 **One-click Deploy** - Web Store publishing
-- 📖 **Documentation** - Comprehensive guides
-- 🛠️ **Dev Tools** - Custom DevTools panel
-- 🐛 **Error Tracking** - Sentry integration ready
+### 📝 Content Extraction
 
-## 🛠️ Tech Stack
+- **Smart Extraction**: Automatically extract main content from any webpage
+- **Site Adapters**: Optimized extraction for popular sites
+- **Multiple Formats**: Export as JSON, Markdown, or HTML
+- **Batch Processing**: Extract from multiple URLs simultaneously
 
-- **Framework**: [Plasmo](https://plasmo.com/) - The browser extension framework
-- **UI Library**: React 18 + TypeScript
-- **Styling**: Tailwind CSS + Radix UI
-- **State Management**: React Query + Zustand
-- **Backend**: Supabase (Auth + Database + Storage)
-- **Payments**: Stripe (Subscriptions + Customer Portal)
-- **Build Tool**: Plasmo + ESBuild
-- **Testing**: Jest + React Testing Library
-- **CI/CD**: GitHub Actions
+### 📊 Content Analysis
+
+- **AI Analysis**: Sentiment, tone, themes, and key points
+- **NLP Processing**: Readability scores, keyword extraction, entity recognition
+- **SEO Analysis**: Content optimization suggestions
+- **Writing Quality**: Grammar, style, and coherence checks
+
+### 💾 Advanced Storage
+
+- **Encryption**: AES-GCM encryption for sensitive data
+- **Compression**: Automatic compression for large data
+- **Cross-Context Sync**: Real-time synchronization
+- **Advanced Querying**: SQL-like queries with full-text search
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ and npm/pnpm
+- Node.js 18+ and pnpm
 - Chrome/Edge/Brave browser
-- Supabase account
-- Stripe account (for payments)
-- Google Cloud Console access (for OAuth)
+- API keys for AI providers
 
-### 1. Clone and Install
+### Installation
 
 ```bash
 # Clone the template
-git clone https://github.com/maemreyo/ultimate-chrome-extension.git my-extension
-cd my-extension
+git clone https://github.com/yourusername/ultimate-ai-chrome-extension.git
+cd ultimate-ai-chrome-extension
 
 # Install dependencies
-pnpm install # or npm install
-```
+pnpm install
 
-### 2. Environment Setup
-
-```bash
-# Copy environment template
+# Copy environment variables
 cp .env.example .env.development
 
-# Fill in your credentials
+# Fill in your API keys
 code .env.development
 ```
 
-Required environment variables:
+### Required Environment Variables
+
 ```env
-# Supabase
+# AI Provider Keys
+PLASMO_PUBLIC_OPENAI_API_KEY=sk-...
+PLASMO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
+PLASMO_PUBLIC_GOOGLE_AI_API_KEY=...
+
+# Supabase (for auth)
 PLASMO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-PLASMO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+PLASMO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 
-# Stripe
+# Stripe (optional, for payments)
 PLASMO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-STRIPE_SECRET_KEY=sk_test_...
 
-# Google OAuth
-GOOGLE_OAUTH_CLIENT_ID=1234567890-xxx.apps.googleusercontent.com
-
-# Extension
-CRX_PUBLIC_KEY=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+# Encryption (auto-generated if not provided)
+PLASMO_PUBLIC_ENCRYPTION_KEY=your-encryption-key
 ```
 
-### 3. Supabase Setup
-
-```sql
--- Run migrations in Supabase SQL editor
--- File: supabase/migrations/001_initial_schema.sql
-```
-
-Enable providers in Supabase Dashboard:
-- Email/Password
-- Google OAuth
-- Configure redirect URLs
-
-### 4. Stripe Setup
-
-1. Create products and prices in Stripe Dashboard
-2. Set up webhooks:
-   ```
-   https://your-api.com/stripe/webhook
-   ```
-3. Configure customer portal
-
-### 5. Development
+### Development
 
 ```bash
 # Start development server
 pnpm dev
 
-# Build for production
-pnpm build
-
-# Run tests
-pnpm test
+# Load extension in Chrome:
+# 1. Open chrome://extensions/
+# 2. Enable "Developer mode"
+# 3. Click "Load unpacked"
+# 4. Select build/chrome-mv3-dev folder
 ```
 
-### 6. Load Extension
-
-1. Open `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `build/chrome-mv3-dev` folder
-
-## 📁 Project Structure
+## 🏗️ Architecture
 
 ```
-my-extension/
-├── src/
-│   ├── background/              # Background service worker
-│   │   ├── index.ts            # Main background script
-│   │   ├── messages/           # Message handlers
-│   │   └── ports/              # Port handlers
-│   │
-│   ├── contents/               # Content scripts
-│   │   ├── overlay.tsx         # React overlay
-│   │   ├── inject.ts          # Page script injection
-│   │   └── styles.css         # Content styles
-│   │
-│   ├── popup/                  # Extension popup
-│   │   ├── index.tsx          # Popup entry
-│   │   └── tabs/              # Popup tabs
-│   │
-│   ├── options/                # Options page
-│   │   ├── index.tsx          # Options entry
-│   │   └── components/        # Settings components
-│   │
-│   ├── sidepanel/             # Side panel (Chrome 114+)
-│   │   ├── index.tsx          # Panel entry
-│   │   └── components/        # Panel components
-│   │
-│   ├── newtab/                # New tab override
-│   │   ├── index.tsx          # New tab entry
-│   │   └── components/        # Dashboard widgets
-│   │
-│   ├── tabs/                  # Extension pages
-│   │   ├── welcome.tsx        # Onboarding
-│   │   ├── pricing.tsx        # Pricing page
-│   │   └── dashboard.tsx      # Analytics
-│   │
-│   ├── core/                  # Core utilities
-│   │   ├── supabase.ts       # Supabase client
-│   │   ├── stripe.ts         # Stripe integration
-│   │   ├── storage.ts        # Storage helpers
-│   │   ├── messaging.ts      # Message system
-│   │   └── auth.ts           # Authentication
-│   │
-│   ├── hooks/                 # React hooks
-│   │   ├── useAuth.ts        # Auth hook
-│   │   ├── useStorage.ts     # Storage hook
-│   │   └── useMessage.ts     # Messaging hook
-│   │
-│   ├── components/            # Shared components
-│   │   ├── ui/               # Base UI components
-│   │   └── common/           # Business components
-│   │
-│   └── styles/               # Global styles
-│       └── globals.css       # Tailwind imports
+src/
+├── core/                      # Core services
+│   ├── ai-service.ts         # AI integration
+│   ├── analysis-service.ts   # Content analysis
+│   ├── content-extraction-service.ts
+│   └── storage.ts           # Advanced storage
 │
-├── public/                    # Static assets
-├── assets/                    # Icons and images
-├── supabase/                 # Database migrations
-├── scripts/                  # Build scripts
-├── tests/                    # Test files
+├── background/              # Background scripts
+│   ├── index.ts            # Service initialization
+│   └── messages/           # Message handlers
 │
-├── .env.example              # Environment template
-├── package.json              # Dependencies
-├── tailwind.config.js        # Tailwind config
-├── tsconfig.json             # TypeScript config
-└── README.md                 # Documentation
+├── contents/               # Content scripts
+│   └── ai-assistant-overlay.tsx  # AI overlay
+│
+├── popup/                  # Extension popup
+├── sidepanel/             # Side panel (Chrome 114+)
+├── newtab/                # New tab dashboard
+├── options/               # Settings page
+│
+├── hooks/                 # React hooks
+│   └── useIntegratedServices.ts
+│
+└── components/           # Shared UI components
 ```
 
-## 🔑 Core Concepts
+## 📱 User Interface
 
-### 1. Authentication Flow
+### 1. **Popup** (Click extension icon)
+
+- Quick access to extract & analyze current page
+- AI chat interface
+- Usage statistics
+
+### 2. **Side Panel** (Chrome 114+)
+
+- Full-featured AI assistant
+- Saved content management
+- History and analytics
+
+### 3. **Content Overlay**
+
+- Floating AI button on all pages
+- Text selection quick actions
+- Real-time AI assistance
+
+### 4. **New Tab Dashboard**
+
+- Usage statistics
+- Quick links
+- Recent activity
+- AI tips
+
+### 5. **Options Page**
+
+- AI provider configuration
+- Content extraction settings
+- Analysis preferences
+- Storage management
+
+## 🔧 Core Features Usage
+
+### AI Text Generation
 
 ```typescript
-// Simple authentication with Supabase
-import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import { aiService } from "~core/ai-service"
 
-function LoginComponent() {
-  const { signIn, signInWithGoogle, user } = useSupabaseAuth()
+// Generate text
+const response = await aiService.generateText(
+  "Write a summary of quantum computing",
+  { temperature: 0.7, maxTokens: 200 }
+)
 
-  // Email/Password login
-  const handleLogin = async () => {
-    await signIn(email, password)
-  }
-
-  // OAuth login
-  const handleGoogleLogin = async () => {
-    await signInWithGoogle()
-  }
-}
-```
-
-### 2. Message Passing
-
-```typescript
-// Type-safe messaging between components
-import { sendToBackground } from "@plasmohq/messaging"
-
-// From content script or popup
-const response = await sendToBackground({
-  name: "get-user-data",
-  body: { userId: "123" }
+// Summarize content
+const summary = await aiService.summarize(longText, {
+  style: "bullet",
+  maxLength: 200
 })
 
-// Background handler
-export const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
-  const data = await fetchUserData(req.body.userId)
-  res.send({ success: true, data })
+// Extract key points
+const keyPoints = await aiService.extractKeyPoints(text)
+
+// Analyze sentiment
+const sentiment = await aiService.analyzeSentiment(text)
+```
+
+### Content Extraction
+
+```typescript
+import { contentExtractionService } from "~core/content-extraction-service"
+
+// Extract from current tab
+const result = await contentExtractionService.extractFromCurrentTab()
+
+// Extract from URL
+const content = await contentExtractionService.extractFromURL(
+  "https://example.com"
+)
+
+// Extract and save
+const saved = await contentExtractionService.extractAndSave(url, [
+  "tag1",
+  "tag2"
+])
+
+// Batch extraction
+const results = await contentExtractionService.extractBatch(urls)
+```
+
+### Content Analysis
+
+```typescript
+import { analysisService } from "~core/analysis-service"
+
+// Analyze text
+const analysis = await analysisService.analyzeText(text, {
+  includeNLP: true,
+  includeReadability: true,
+  includeKeywords: true
+})
+
+// Analyze current tab
+const pageAnalysis = await analysisService.analyzeCurrentTab()
+
+// SEO analysis
+const seoAnalysis = await analysisService.analyzeSEO(content)
+
+// Writing quality check
+const quality = await analysisService.analyzeQuality(text)
+```
+
+### Advanced Storage
+
+```typescript
+import { aiAnalysisCache, savedContent } from "~core/storage"
+
+// Save content with analysis
+const saved = await savedContent.add({
+  url: "https://example.com",
+  title: "Example Article",
+  content: extractedContent,
+  analysis: analysisResult,
+  tags: ["ai", "technology"]
+})
+
+// Search saved content
+const results = await savedContent.search("quantum computing")
+
+// Query with filters
+const filtered = await savedContent.query({
+  tags: { $contains: "ai" },
+  createdAt: { $gte: new Date("2024-01-01") }
+})
+```
+
+## 🎨 Customization
+
+### Adding New AI Providers
+
+```typescript
+// In src/core/ai-service.ts
+const providers = {
+  openai: { models: [...] },
+  anthropic: { models: [...] },
+  google: { models: [...] },
+  // Add your provider here
+  custom: { models: ['custom-model'] }
 }
 ```
 
-### 3. Storage Management
+### Custom Content Adapters
 
 ```typescript
-// Typed storage with encryption support
-import { useStorage } from "~hooks/useStorage"
+// Create a new adapter
+const customAdapter = {
+  name: "my-site",
+  patterns: [/mysite\.com/],
+  priority: 10,
 
-function SettingsComponent() {
-  const [settings, setSettings] = useStorage("settings", {
-    theme: "light",
-    notifications: true
-  })
-
-  // Auto-synced across devices
-  const updateTheme = (theme: "light" | "dark") => {
-    setSettings({ ...settings, theme })
+  extract(doc: Document, url: string) {
+    // Custom extraction logic
+    return {
+      title: doc.querySelector("h1")?.textContent || ""
+      // ... other fields
+    }
   }
 }
+
+// Register it
+contentExtractionService.registerAdapter(customAdapter)
 ```
 
-### 4. Subscription Management
+### Custom Analysis Templates
 
 ```typescript
-// Stripe subscription handling
-import { stripeService } from "~core/stripe"
-
-function PricingComponent() {
-  const handleSubscribe = async (priceId: string) => {
-    const sessionId = await stripeService.createCheckoutSession(priceId)
-    await stripeService.redirectToCheckout(sessionId)
-  }
-
-  const handleManageBilling = async () => {
-    const portalUrl = await stripeService.createCustomerPortalSession()
-    window.open(portalUrl)
-  }
-}
+// Add custom analysis template
+await analysisService.runCustomAnalysis("competitorAnalysis", {
+  content: "Your content",
+  competitors: ["url1", "url2"]
+})
 ```
 
-## 💻 Development Guide
-
-### Component Development
-
-1. **Popup Components** - Small, focused UI
-   ```typescript
-   // src/popup/tabs/home.tsx
-   export function HomeTab() {
-     // Keep it lightweight
-     // Use messaging for heavy operations
-   }
-   ```
-
-2. **Content Scripts** - Page manipulation
-   ```typescript
-   // src/contents/overlay.tsx
-   export const config: PlasmoCSConfig = {
-     matches: ["https://example.com/*"],
-     css: ["content.css"]
-   }
-   ```
-
-3. **Background Tasks** - Long-running operations
-   ```typescript
-   // src/background/index.ts
-   chrome.alarms.create("sync", { periodInMinutes: 30 })
-   ```
-
-### State Management
-
-1. **Local State** - Component-specific
-   ```typescript
-   const [isOpen, setIsOpen] = useState(false)
-   ```
-
-2. **Extension Storage** - Persistent data
-   ```typescript
-   const [userData] = useStorage("userData")
-   ```
-
-3. **Supabase** - Cloud sync
-   ```typescript
-   const { data } = await supabase
-     .from("user_data")
-     .select("*")
-   ```
-
-### Styling Guidelines
-
-1. **Tailwind Classes** - Utility-first
-   ```tsx
-   <Button className="px-4 py-2 bg-primary text-white rounded-lg">
-     Click me
-   </Button>
-   ```
-
-2. **Component Variants** - CVA
-   ```typescript
-   const buttonVariants = cva("base-classes", {
-     variants: {
-       size: {
-         sm: "px-2 py-1",
-         md: "px-4 py-2"
-       }
-     }
-   })
-   ```
-
-3. **Dark Mode** - System preference
-   ```css
-   @media (prefers-color-scheme: dark) {
-     /* Dark mode styles */
-   }
-   ```
-
-## 💰 Monetization
-
-### Subscription Tiers
-
-```typescript
-const plans = [
-  {
-    name: "Free",
-    price: 0,
-    features: ["Basic features", "Limited storage"],
-    limits: { storage: 100, apiCalls: 1000 }
-  },
-  {
-    name: "Pro",
-    price: 9.99,
-    features: ["All features", "Priority support"],
-    limits: { storage: 10000, apiCalls: 100000 }
-  }
-]
-```
-
-### Implementation Steps
-
-1. **Create Stripe Products**
-   - Log into Stripe Dashboard
-   - Create products and prices
-   - Copy price IDs
-
-2. **Update Pricing Page**
-   ```typescript
-   // src/tabs/pricing.tsx
-   const PRICE_IDS = {
-     pro: "price_xxxxx",
-     premium: "price_yyyyy"
-   }
-   ```
-
-3. **Handle Webhooks**
-   ```typescript
-   // api/stripe/webhook.ts
-   switch (event.type) {
-     case "checkout.session.completed":
-       await updateUserSubscription(session)
-       break
-   }
-   ```
-
-4. **Gate Features**
-   ```typescript
-   function PremiumFeature() {
-     const { subscription } = useAuth()
-
-     if (subscription?.status !== "active") {
-       return <UpgradePrompt />
-     }
-
-     return <FeatureContent />
-   }
-   ```
-
-## 🚀 Deployment
-
-### 1. Pre-deployment Checklist
-
-- [ ] Update version in `package.json`
-- [ ] Test all features
-- [ ] Run production build
-- [ ] Update screenshots
-- [ ] Prepare store listing
-
-### 2. Build for Production
+## 🧪 Testing
 
 ```bash
-# Build all targets
+# Run tests
+pnpm test
+
+# Run with coverage
+pnpm test:coverage
+
+# Run in watch mode
+pnpm test:watch
+```
+
+## 📦 Building & Deployment
+
+```bash
+# Build for all browsers
 pnpm build
 
-# Build specific browser
-pnpm build --target=chrome-mv3
-pnpm build --target=firefox-mv2
-pnpm build --target=edge-mv3
+# Build for specific browser
+pnpm build:chrome
+pnpm build:firefox
+pnpm build:edge
+
+# Package for store submission
+pnpm package
 ```
 
-### 3. Chrome Web Store
+## 🔒 Security Best Practices
 
-1. Create developer account ($5 one-time fee)
-2. Prepare assets:
-   - Icon (128x128)
-   - Screenshots (1280x800 or 640x400)
-   - Promotional images
-3. Upload package:
-   ```bash
-   pnpm package
-   # Upload chrome-extension.zip
-   ```
+1. **API Keys**: Never commit API keys. Use environment variables.
+2. **Encryption**: Enable encryption for sensitive data storage.
+3. **Permissions**: Request only necessary permissions.
+4. **Content Security**: Sanitize all user inputs and extracted content.
 
-### 4. Automated Publishing
+## 📊 Performance Optimization
 
-```yaml
-# .github/workflows/publish.yml
-name: Publish Extension
-on:
-  push:
-    tags:
-      - 'v*'
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: PlasmoHQ/bpp@v3
-        with:
-          keys: ${{ secrets.BPP_KEYS }}
-```
-
-## 📚 Best Practices
-
-### Security
-
-1. **Content Security Policy**
-   ```json
-   {
-     "content_security_policy": {
-       "extension_pages": "script-src 'self'; object-src 'self'"
-     }
-   }
-   ```
-
-2. **Permissions** - Request only what you need
-   ```json
-   {
-     "permissions": ["storage", "tabs"],
-     "optional_permissions": ["notifications"]
-   }
-   ```
-
-3. **Data Encryption** - Use SecureStorage for sensitive data
-   ```typescript
-   import { SecureStorage } from "@plasmohq/storage/secure"
-   ```
-
-### Performance
-
-1. **Lazy Loading**
-   ```typescript
-   const HeavyComponent = lazy(() => import("./HeavyComponent"))
-   ```
-
-2. **Debouncing**
-   ```typescript
-   const debouncedSearch = useMemo(
-     () => debounce(search, 300),
-     []
-   )
-   ```
-
-3. **Bundle Optimization**
-   ```bash
-   # Analyze bundle
-   pnpm build --analyze
-   ```
-
-### User Experience
-
-1. **Onboarding Flow**
-   - Welcome page on install
-   - Permission explanations
-   - Feature tour
-
-2. **Error Handling**
-   ```typescript
-   try {
-     await riskyOperation()
-   } catch (error) {
-     toast.error("Something went wrong")
-     Sentry.captureException(error)
-   }
-   ```
-
-3. **Feedback**
-   - Loading states
-   - Success messages
-   - Error recovery
+1. **Caching**: AI responses are cached to reduce API calls
+2. **Compression**: Large data is automatically compressed
+3. **Lazy Loading**: Features load on-demand
+4. **Debouncing**: Real-time features use debouncing
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **"Cannot read properties of undefined"**
-   ```typescript
-   // Check if running in extension context
-   if (typeof chrome !== 'undefined' && chrome.runtime) {
-     // Extension code
-   }
-   ```
+**AI not working**
 
-2. **CORS Errors**
-   ```json
-   {
-     "host_permissions": ["https://api.example.com/*"]
-   }
-   ```
+- Check API key configuration in Options
+- Verify you're signed in
+- Check usage limits
 
-3. **Storage Quota Exceeded**
-   ```typescript
-   // Use sync storage sparingly (100KB limit)
-   // Use local storage for larger data (10MB limit)
-   ```
+**Content extraction fails**
 
-4. **Service Worker Inactive**
-   ```typescript
-   // Keep alive with alarms
-   chrome.alarms.create("keep-alive", { periodInMinutes: 1 })
-   ```
+- Some sites may block extraction
+- Try disabling ad blockers
+- Check console for errors
 
-### Debugging
+**Storage quota exceeded**
 
-1. **Background Script**
-   - Chrome DevTools > Sources > Service Workers
-
-2. **Content Scripts**
-   - Inspect element on page
-   - Check for injection
-
-3. **Popup/Options**
-   - Right-click > Inspect
-
-4. **Storage**
-   ```javascript
-   // In console
-   chrome.storage.local.get(null, console.log)
-   ```
-
-## 📖 Resources
-
-### Official Documentation
-- [Chrome Extension Docs](https://developer.chrome.com/docs/extensions/)
-- [Plasmo Framework](https://docs.plasmo.com/)
-- [Supabase Docs](https://supabase.com/docs)
-- [Stripe Docs](https://stripe.com/docs)
-
-### Tutorials
-- [Building Chrome Extensions with React](https://blog.plasmo.com/p/building-chrome-extensions-with-react)
-- [Monetizing Browser Extensions](https://blog.plasmo.com/p/monetizing-browser-extensions)
-- [Extension Security Best Practices](https://developer.chrome.com/docs/extensions/mv3/security/)
-
-### Community
-- [Plasmo Discord](https://discord.gg/plasmo)
-- [Chrome Extension Developers](https://groups.google.com/g/chromium-extensions)
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/chrome-extension)
-
-### Tools
-- [Extension Monitor](https://monitor.firefox.com/)
-- [Chrome Extension Source Viewer](https://chrome.google.com/webstore/detail/chrome-extension-source-v/jifpbeccnghkjeaalbbjmodiffmgedin)
-- [Extension Rank](https://extensionrank.com/)
+- Clear old data in Options > Storage
+- Enable automatic cleanup
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- [Plasmo Team](https://www.plasmo.com/) for the amazing framework
-- [Shadcn](https://ui.shadcn.com/) for the UI components
-- [Supabase](https://supabase.com/) for the backend infrastructure
-- [Stripe](https://stripe.com/) for payment processing
+- [Plasmo Framework](https://www.plasmo.com/) for the extension framework
+- [Shadcn UI](https://ui.shadcn.com/) for UI components
+- All the amazing open source libraries used in this project
 
 ---
 
 <div align="center">
-  <p>Built with ❤️ by developers, for developers</p>
+  <p>Built with ❤️ using the power of AI</p>
   <p>
-    <a href="https://twitter.com/maemreyo">Twitter</a> •
-    <a href="https://github.com/maemreyo">GitHub</a> •
-    <a href="https://discord.gg/yourcommunity">Discord</a>
+    <a href="https://github.com/yourusername/ultimate-ai-chrome-extension">GitHub</a> •
+    <a href="https://discord.gg/yourcommunity">Discord</a> •
+    <a href="https://twitter.com/yourusername">Twitter</a>
   </p>
 </div>

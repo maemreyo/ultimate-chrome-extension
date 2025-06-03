@@ -1,0 +1,2098 @@
+// src/contents/ai-assistant-overlay.tsx
+// AI Assistant overlay for web pages
+
+import cssText from "data-text:~styles/content.css"
+import type { PlasmoCSConfig } from "plasmo"
+import { useState, useEffect } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { ThemeProvider } from "~components/theme-provider"
+import { Button } from "~components/ui/button"
+import { Card, CardContent } from "~components/ui/card"
+import { Textarea } from "~components/ui/textarea"
+import { Badge } from "~components/ui/badge"
+import {
+  Brain,
+  X,
+  Sparkles,
+  FileText,
+  MessageSquare,
+  Minimize2,
+  Maximize2,
+  Send,
+  Loader2
+} from "lucide-react"
+import { sendToBackground } from "@plasmohq/messaging"
+import { motion, AnimatePresence } from "framer-motion"
+
+export const config: PlasmoCSConfig = {
+  matches: ["<all_urls>"],
+  exclude_matches: ["*://localhost/*"],
+  css: ["font.css"]
+}
+
+const queryClient = new QueryClient()
+
+export const getStyle = () => {
+  const style = document.createElement("style")
+  style.textContent = cssText + `
+    .ai-assistant-overlay {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 2147483647;
+      font-family: "Inter", sans-serif !important;
+    }
+
+    .ai-floating-button {
+      width: 56px;
+      height: 56px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .ai-floating-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .ai-assistant-panel {
+      width: 380px;
+      max-height: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+
+    .dark .ai-assistant-panel {
+      background: #1a1a1a;
+    }
+  `
+  return style
+}
+
+export const getShadowHostId = () => "ai-assistant-overlay-root"
+
+const AIAssistantOverlay = () => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [selectedText, setSelectedText] = useState("")
+  const [aiResponse, setAiResponse] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [quickAction, setQuickAction] = useState<string | null>(null)
+  const [customPrompt, setCustomPrompt] = useState("")
+
+  // Listen for text selection
+  useEffect(() => {
+    const handleSelection = () => {
+      const selection = window.getSelection()
+      const text = selection?.toString().trim()
+      if (text && text.length > 10) {
+        setSelectedText(text)
+        // Show quick actions if text is selected
+        if (!isOpen) {
+          setQuickAction('selection')
+        }
+      }
+    }
+
+    document.addEventListener('selectionchange', handleSelection)
+    return () => document.removeEventListener('selectionchange', handleSelection)
+  }, [isOpen])
+
+  // Quick actions for selected text
+  const quickActions = [
+    { id: 'summarize', label: 'Summarize', icon: '📝' },
+    { id: 'explain', label: 'Explain', icon: '💡' },
+    { id: 'translate', label: 'Translate', icon: '🌐' },
+    { id: 'improve', label: 'Improve', icon: '✨' }
+  ]
+
+  const handleQuickAction = async (action: string) => {
+    if (!selectedText) return
+
+    setIsLoading(true)
+    setAiResponse("")
+    setIsOpen(true)
+    setQuickAction(null)
+
+    try {
+      let prompt = ""
+      switch (action) {
+        case 'summarize':
+          prompt = `Summarize this text concisely:\n\n${selectedText}`
+          break
+        case 'explain':
+          prompt = `Explain this in simple terms:\n\n${selectedText}`
+          break
+        case 'translate':
+          prompt = `Translate this to English (or to Spanish if already in English):\n\n${selectedText}`
+          break
+        case 'improve':
+          prompt = `Improve this text for clarity and professionalism:\n\n${selectedText}`
+          break
+      }
+
+      const response = await sendToBackground({
+        name: "ai-generate",
+        body: { prompt, options: { temperature: 0.7, maxTokens: 300 } }
+      })
+
+      if (response.success) {
+        setAiResponse(response.data)
+      } else {
+        setAiResponse("Error: " + response.error)
+      }
+    } catch (error) {
+      setAiResponse("Failed to get AI response")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCustomPrompt = async () => {
+    if (!customPrompt.trim()) return
+
+    setIsLoading(true)
+    setAiResponse("")
+
+    try {
+      const context = selectedText
+        ? `Context from page:\n${selectedText}\n\nRequest: ${customPrompt}`
+        : customPrompt
+
+      const response = await sendToBackground({
+        name: "ai-generate",
+        body: {
+          prompt: context,
+          options: { temperature: 0.7, maxTokens: 500 }
+        }
+      })
+
+      if (response.success) {
+        setAiResponse(response.data)
+        setCustomPrompt("")
+      } else {
+        setAiResponse("Error: " + response.error)
+      }
+    } catch (error) {
+      setAiResponse("Failed to get AI response")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const extractPageContent = async () => {
+    setIsLoading(true)
+    try {
+      const response = await sendToBackground({
+        name: "extract-content",
+        body: { method: "currentTab" }
+      })
+
+      if (response.success) {
+        setAiResponse(`Page extracted successfully!\n\nTitle: ${response.data.title}\nWord Count: ${response.data.wordCount}\nReading Time: ${response.data.readingTime} min\n\nContent has been saved for analysis.`)
+      }
+    } catch (error) {
+      setAiResponse("Failed to extract page content")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <div className="ai-assistant-overlay">
+          <AnimatePresence>
+            {/* Quick Actions Popup */}
+            {quickAction === 'selection' && selectedText && !isOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                className="absolute bottom-20 right-0 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 flex gap-1"
+              >
+                {quickActions.map(action => (
+                  <Button
+                    key={action.id}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleQuickAction(action.id)}
+                    className="flex items-center gap-1"
+                  >
+                    <span>{action.icon}</span>
+                    <span className="text-xs">{action.label}</span>
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setQuickAction(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </motion.div>
+            )}
+
+            {/* Main Panel */}
+            {isOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="ai-assistant-panel mb-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-5 w-5 text-primary" />
+                    <span className="font-semibold">AI Assistant</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setIsMinimized(!isMinimized)}
+                    >
+                      {isMinimized ? <Maximize2 className="h-4 w-4" /> : <Minimize2 className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                {!isMinimized && (
+                  <div className="p-4 space-y-4">
+                    {/* Page Actions */}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={extractPageContent}
+                        disabled={isLoading}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Extract Page
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleQuickAction('summarize')}
+                        disabled={isLoading || !selectedText}
+                      >
+                        <Sparkles className="h-4 w-4 mr-1" />
+                        Summarize
+                      </Button>
+                    </div>
+
+                    {/* Selected Text Display */}
+                    {selectedText && (
+                      <Card className="bg-muted">
+                        <CardContent className="p-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <Badge variant="secondary" className="text-xs">Selected Text</Badge>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() => setSelectedText("")}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <p className="text-sm line-clamp-3">{selectedText}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* AI Response */}
+                    {aiResponse && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Brain className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-medium">AI Response</span>
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{aiResponse}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Loading State */}
+                    {isLoading && (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    )}
+
+                    {/* Custom Prompt Input */}
+                    <div className="space-y-2">
+                      <Textarea
+                        placeholder="Ask AI anything about this page..."
+                        value={customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        className="min-h-[80px] text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleCustomPrompt()
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={handleCustomPrompt}
+                        disabled={isLoading || !customPrompt.trim()}
+                        className="w-full"
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        Send
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Floating Button */}
+          <motion.button
+            className="ai-floating-button"
+            onClick={() => setIsOpen(!isOpen)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {isOpen ? (
+              <X className="h-6 w-6 text-white" />
+            ) : (
+              <Brain className="h-6 w-6 text-white" />
+            )}
+          </motion.button>
+        </div>
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default AIAssistantOverlay
+
+
+
+
+// src/options/index.tsx
+// Enhanced options page with AI configuration
+
+import { useState, useEffect } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { Toaster } from "~components/ui/toaster"
+import { ThemeProvider } from "~components/theme-provider"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~components/ui/card"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Label } from "~components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~components/ui/select"
+import { Switch } from "~components/ui/switch"
+import { Badge } from "~components/ui/badge"
+import { Progress } from "~components/ui/progress"
+import { Alert, AlertDescription } from "~components/ui/alert"
+import {
+  Brain,
+  Key,
+  Settings,
+  Database,
+  Shield,
+  Palette,
+  BellRing,
+  CreditCard,
+  BarChart3,
+  FileText,
+  Sparkles,
+  AlertCircle,
+  CheckCircle,
+  Loader2
+} from "lucide-react"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import { useSettings, useStorageQuery } from "@matthew.ngo/chrome-storage"
+import { sendToBackground } from "@plasmohq/messaging"
+import toast from "react-hot-toast"
+import "~styles/globals.css"
+
+const queryClient = new QueryClient()
+
+const aiProviders = [
+  { value: 'openai', label: 'OpenAI', models: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo-preview'] },
+  { value: 'anthropic', label: 'Anthropic', models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229'] },
+  { value: 'google', label: 'Google AI', models: ['gemini-pro', 'gemini-pro-vision'] }
+]
+
+function OptionsContent() {
+  const { user, isAuthenticated } = useSupabaseAuth()
+  const { settings, update: updateSettings } = useSettings()
+  const [activeTab, setActiveTab] = useState("ai")
+  const [isTestingAI, setIsTestingAI] = useState(false)
+  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Load AI stats
+  const { data: aiStats } = useStorageQuery({
+    where: { _key: 'ai-usage-stats' }
+  })
+
+  // AI Settings State
+  const [aiProvider, setAiProvider] = useState(settings?.ai?.provider || 'openai')
+  const [aiModel, setAiModel] = useState(settings?.ai?.model || 'gpt-3.5-turbo')
+  const [apiKey, setApiKey] = useState(settings?.ai?.apiKey || '')
+
+  // Content Settings State
+  const [contentSettings, setContentSettings] = useState({
+    autoExtract: settings?.contentExtraction?.autoExtract || false,
+    preserveFormatting: settings?.contentExtraction?.preserveFormatting ?? true,
+    includeImages: settings?.contentExtraction?.includeImages ?? true
+  })
+
+  // Analysis Settings State
+  const [analysisSettings, setAnalysisSettings] = useState({
+    autoAnalyze: settings?.analysis?.autoAnalyze || false,
+    depth: settings?.analysis?.depth || 'standard',
+    includeRecommendations: settings?.analysis?.includeRecommendations ?? true
+  })
+
+  // Test AI Configuration
+  const testAIConfig = async () => {
+    setIsTestingAI(true)
+    setAiTestResult(null)
+
+    try {
+      const response = await sendToBackground({
+        name: "test-ai-config",
+        body: { provider: aiProvider, apiKey, model: aiModel }
+      })
+
+      if (response.success) {
+        setAiTestResult({ success: true, message: "AI configuration is valid!" })
+      } else {
+        setAiTestResult({ success: false, message: response.error || "Configuration test failed" })
+      }
+    } catch (error) {
+      setAiTestResult({ success: false, message: "Failed to test configuration" })
+    } finally {
+      setIsTestingAI(false)
+    }
+  }
+
+  // Save all settings
+  const saveSettings = async () => {
+    setIsSaving(true)
+
+    try {
+      await updateSettings({
+        ai: {
+          provider: aiProvider,
+          model: aiModel,
+          apiKey
+        },
+        contentExtraction: contentSettings,
+        analysis: analysisSettings
+      })
+
+      // Update backend services
+      await sendToBackground({
+        name: "update-settings",
+        body: {
+          settings: {
+            ai: { provider: aiProvider, model: aiModel, apiKey },
+            contentExtraction: contentSettings,
+            analysis: analysisSettings
+          }
+        }
+      })
+
+      toast.success("Settings saved successfully!")
+    } catch (error) {
+      toast.error("Failed to save settings")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Calculate usage percentage
+  const usagePercentage = aiStats?.tokensUsed
+    ? Math.min((aiStats.tokensUsed / 1000000) * 100, 100)
+    : 0
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-6xl mx-auto p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Extension Settings</h1>
+          <p className="text-muted-foreground">Configure your AI-powered Chrome extension</p>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-6 w-full mb-8">
+            <TabsTrigger value="ai" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Config</span>
+            </TabsTrigger>
+            <TabsTrigger value="extraction" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Extraction</span>
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Analysis</span>
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              <span className="hidden sm:inline">Storage</span>
+            </TabsTrigger>
+            <TabsTrigger value="appearance" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              <span className="hidden sm:inline">Appearance</span>
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              <span className="hidden sm:inline">Billing</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ai" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Provider Configuration</CardTitle>
+                <CardDescription>
+                  Configure your AI provider and API credentials
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Provider Selection */}
+                <div className="space-y-2">
+                  <Label>AI Provider</Label>
+                  <Select value={aiProvider} onValueChange={setAiProvider}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aiProviders.map(provider => (
+                        <SelectItem key={provider.value} value={provider.value}>
+                          {provider.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Model Selection */}
+                <div className="space-y-2">
+                  <Label>Model</Label>
+                  <Select value={aiModel} onValueChange={setAiModel}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aiProviders
+                        .find(p => p.value === aiProvider)
+                        ?.models.map(model => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* API Key */}
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={`Enter your ${aiProvider} API key`}
+                    />
+                    <Button
+                      onClick={testAIConfig}
+                      disabled={!apiKey || isTestingAI}
+                      variant="outline"
+                    >
+                      {isTestingAI ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Test"
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Get your API key from the {aiProvider} dashboard
+                  </p>
+                </div>
+
+                {/* Test Result */}
+                {aiTestResult && (
+                  <Alert variant={aiTestResult.success ? "default" : "destructive"}>
+                    {aiTestResult.success ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4" />
+                    )}
+                    <AlertDescription>{aiTestResult.message}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Save Button */}
+                <Button onClick={saveSettings} disabled={isSaving} className="w-full">
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Save AI Settings
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* AI Usage Stats */}
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Usage Statistics</CardTitle>
+                <CardDescription>
+                  Monitor your AI API usage and costs
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Tokens Used</span>
+                    <span className="font-medium">
+                      {aiStats?.tokensUsed?.toLocaleString() || 0} / 1M
+                    </span>
+                  </div>
+                  <Progress value={usagePercentage} />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-2xl font-bold">{aiStats?.requestsCount || 0}</p>
+                    <p className="text-sm text-muted-foreground">Requests</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      ${aiStats?.costEstimate?.toFixed(2) || '0.00'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Est. Cost</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {aiStats?.lastReset ? new Date(aiStats.lastReset).toLocaleDateString() : 'N/A'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Last Reset</p>
+                  </div>
+                </div>
+
+                <Button variant="outline" className="w-full">
+                  Reset Usage Stats
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="extraction" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Content Extraction Settings</CardTitle>
+                <CardDescription>
+                  Configure how content is extracted from web pages
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Auto-Extract Content</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically extract content when visiting articles
+                    </p>
+                  </div>
+                  <Switch
+                    checked={contentSettings.autoExtract}
+                    onCheckedChange={(checked) =>
+                      setContentSettings({ ...contentSettings, autoExtract: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Preserve Formatting</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Keep original text formatting when extracting
+                    </p>
+                  </div>
+                  <Switch
+                    checked={contentSettings.preserveFormatting}
+                    onCheckedChange={(checked) =>
+                      setContentSettings({ ...contentSettings, preserveFormatting: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Include Images</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Extract and save images from content
+                    </p>
+                  </div>
+                  <Switch
+                    checked={contentSettings.includeImages}
+                    onCheckedChange={(checked) =>
+                      setContentSettings({ ...contentSettings, includeImages: checked })
+                    }
+                  />
+                </div>
+
+                <Button onClick={saveSettings} disabled={isSaving} className="w-full">
+                  Save Extraction Settings
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analysis" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Analysis Settings</CardTitle>
+                <CardDescription>
+                  Configure content analysis preferences
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Auto-Analyze</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically analyze extracted content
+                    </p>
+                  </div>
+                  <Switch
+                    checked={analysisSettings.autoAnalyze}
+                    onCheckedChange={(checked) =>
+                      setAnalysisSettings({ ...analysisSettings, autoAnalyze: checked })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Analysis Depth</Label>
+                  <Select
+                    value={analysisSettings.depth}
+                    onValueChange={(value: any) =>
+                      setAnalysisSettings({ ...analysisSettings, depth: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quick">Quick (Basic insights)</SelectItem>
+                      <SelectItem value="standard">Standard (Recommended)</SelectItem>
+                      <SelectItem value="detailed">Detailed (Comprehensive)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Include Recommendations</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Get AI-powered improvement suggestions
+                    </p>
+                  </div>
+                  <Switch
+                    checked={analysisSettings.includeRecommendations}
+                    onCheckedChange={(checked) =>
+                      setAnalysisSettings({ ...analysisSettings, includeRecommendations: checked })
+                    }
+                  />
+                </div>
+
+                <Button onClick={saveSettings} disabled={isSaving} className="w-full">
+                  Save Analysis Settings
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="storage" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Storage Management</CardTitle>
+                <CardDescription>
+                  Manage your stored content and data
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Storage stats would go here */}
+                <p className="text-muted-foreground">Storage management coming soon...</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="appearance" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Appearance Settings</CardTitle>
+                <CardDescription>
+                  Customize the look and feel of the extension
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Appearance settings would go here */}
+                <p className="text-muted-foreground">Appearance settings coming soon...</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="billing" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Billing & Subscription</CardTitle>
+                <CardDescription>
+                  Manage your subscription and billing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Billing info would go here */}
+                <p className="text-muted-foreground">Billing management coming soon...</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
+}
+
+function OptionsIndex() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system">
+        <OptionsContent />
+        <Toaster />
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default OptionsIndex
+
+
+
+// src/sidepanel/index.tsx
+// Enhanced side panel with all integrated features
+
+import { useState, useEffect } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { Toaster } from "react-hot-toast"
+import { ThemeProvider } from "~components/theme-provider"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~components/ui/tabs"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { ScrollArea } from "~components/ui/scroll-area"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { Badge } from "~components/ui/badge"
+import { Textarea } from "~components/ui/textarea"
+import {
+  Brain,
+  FileText,
+  Save,
+  Search,
+  Settings,
+  Sparkles,
+  BarChart3,
+  History,
+  Loader2,
+  Plus,
+  ExternalLink,
+  Trash2,
+  Download,
+  Filter,
+  Clock,
+  Tag
+} from "lucide-react"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import { useExtensionFeatures } from "~hooks/useIntegratedServices"
+import { formatDistanceToNow } from "date-fns"
+import "~styles/globals.css"
+
+const queryClient = new QueryClient()
+
+function SidePanelContent() {
+  const { user } = useSupabaseAuth()
+  const {
+    extraction,
+    analysis,
+    saved,
+    ai,
+    aiStats,
+    history,
+    extractAndAnalyze,
+    extractAnalyzeAndSave
+  } = useExtensionFeatures()
+
+  const [activeTab, setActiveTab] = useState("assistant")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [aiPrompt, setAiPrompt] = useState("")
+  const [aiResponse, setAiResponse] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Get current tab info
+  const [currentTab, setCurrentTab] = useState<chrome.tabs.Tab | null>(null)
+
+  useEffect(() => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) setCurrentTab(tabs[0])
+    })
+
+    const listener = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+      if (changeInfo.status === "complete") {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) setCurrentTab(tabs[0])
+        })
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(listener)
+    return () => chrome.tabs.onUpdated.removeListener(listener)
+  }, [])
+
+  // Extract and analyze current page
+  const handleExtractAndAnalyze = async () => {
+    setIsProcessing(true)
+    try {
+      const result = await extractAndAnalyze()
+      setActiveTab("saved")
+      toast.success("Content extracted and analyzed!")
+    } catch (error) {
+      toast.error("Failed to process page")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Extract, analyze and save
+  const handleExtractAnalyzeSave = async () => {
+    setIsProcessing(true)
+    try {
+      await extractAnalyzeAndSave(['auto-saved'])
+      setActiveTab("saved")
+      toast.success("Content saved successfully!")
+    } catch (error) {
+      toast.error("Failed to save content")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Handle AI prompt
+  const handleAIPrompt = async () => {
+    if (!aiPrompt.trim()) return
+
+    setAiResponse("")
+    try {
+      const response = await ai.generateText(aiPrompt)
+      setAiResponse(response)
+      setAiPrompt("")
+    } catch (error) {
+      toast.error("AI request failed")
+    }
+  }
+
+  // Filter saved content
+  const filteredContent = saved.savedItems?.filter(item => {
+    const matchesSearch = !searchQuery ||
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.content?.cleanText?.toLowerCase().includes(searchQuery.toLowerCase())
+
+    const matchesTags = selectedTags.length === 0 ||
+      selectedTags.some(tag => item.tags?.includes(tag))
+
+    return matchesSearch && matchesTags
+  })
+
+  // Get all unique tags
+  const allTags = [...new Set(saved.savedItems?.flatMap(item => item.tags || []) || [])]
+
+  return (
+    <div className="h-screen flex flex-col bg-background">
+      {/* Header */}
+      <div className="border-b p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            AI Assistant Panel
+          </h1>
+          <Badge variant="outline">{user?.email}</Badge>
+        </div>
+        {currentTab && (
+          <p className="text-sm text-muted-foreground truncate">
+            {currentTab.title}
+          </p>
+        )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="p-4 border-b space-y-2">
+        <div className="flex gap-2">
+          <Button
+            onClick={handleExtractAndAnalyze}
+            disabled={isProcessing || !currentTab}
+            size="sm"
+            className="flex-1"
+          >
+            {isProcessing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4 mr-2" />
+            )}
+            Extract & Analyze
+          </Button>
+          <Button
+            onClick={handleExtractAnalyzeSave}
+            disabled={isProcessing || !currentTab}
+            size="sm"
+            variant="outline"
+            className="flex-1"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Quick Save
+          </Button>
+        </div>
+
+        {/* AI Usage Stats */}
+        {aiStats.stats && (
+          <div className="flex items-center justify-between text-xs bg-muted p-2 rounded">
+            <span>AI Usage:</span>
+            <span className="font-medium">
+              {aiStats.stats.tokensUsed?.toLocaleString() || 0} tokens
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <TabsList className="grid w-full grid-cols-4 px-4">
+            <TabsTrigger value="assistant" className="text-xs">
+              <Brain className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="saved" className="text-xs">
+              <Save className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="history" className="text-xs">
+              <History className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="text-xs">
+              <BarChart3 className="h-4 w-4" />
+            </TabsTrigger>
+          </TabsList>
+
+          <ScrollArea className="h-[calc(100vh-220px)]">
+            {/* AI Assistant Tab */}
+            <TabsContent value="assistant" className="p-4 space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">AI Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={async () => {
+                      const summary = await ai.summarize(currentTab?.title || "")
+                      setAiResponse(summary)
+                    }}
+                    disabled={!ai.isConfigured}
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Summarize Page
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={async () => {
+                      const points = await ai.extractKeyPoints(currentTab?.title || "")
+                      setAiResponse(points.join("\n• "))
+                    }}
+                    disabled={!ai.isConfigured}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Extract Key Points
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={async () => {
+                      const sentiment = await ai.analyzeSentiment(currentTab?.title || "")
+                      setAiResponse(`Sentiment: ${sentiment.sentiment}\nScore: ${sentiment.score}`)
+                    }}
+                    disabled={!ai.isConfigured}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Check Sentiment
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* AI Chat */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Ask AI</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Textarea
+                    placeholder="Ask anything about the current page..."
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="min-h-[80px]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleAIPrompt()
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={handleAIPrompt}
+                    disabled={!aiPrompt.trim() || ai.loading || !ai.isConfigured}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {ai.loading ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Brain className="h-4 w-4 mr-2" />
+                    )}
+                    Ask AI
+                  </Button>
+
+                  {aiResponse && (
+                    <Card className="bg-muted">
+                      <CardContent className="p-3">
+                        <p className="text-sm whitespace-pre-wrap">{aiResponse}</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Saved Content Tab */}
+            <TabsContent value="saved" className="p-4 space-y-4">
+              {/* Search and Filter */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search saved content..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {allTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {allTags.map(tag => (
+                      <Badge
+                        key={tag}
+                        variant={selectedTags.includes(tag) ? "default" : "outline"}
+                        className="cursor-pointer text-xs"
+                        onClick={() => {
+                          setSelectedTags(
+                            selectedTags.includes(tag)
+                              ? selectedTags.filter(t => t !== tag)
+                              : [...selectedTags, tag]
+                          )
+                        }}
+                      >
+                        <Tag className="h-3 w-3 mr-1" />
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Saved Items */}
+              <div className="space-y-2">
+                {saved.isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : filteredContent?.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-6 text-center">
+                      <p className="text-muted-foreground">No saved content found</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  filteredContent?.map((item) => (
+                    <Card key={item.id} className="hover:bg-muted/50 transition-colors">
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm truncate">{item.title}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{item.url}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3 inline mr-1" />
+                                {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                              </span>
+                              {item.tags?.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => window.open(item.url, "_blank")}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                // Delete functionality
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            {/* History Tab */}
+            <TabsContent value="history" className="p-4">
+              <div className="space-y-2">
+                {history?.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-6 text-center">
+                      <p className="text-muted-foreground">No history yet</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  history?.map((item) => (
+                    <Card key={item.id} className="hover:bg-muted/50 transition-colors">
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.description}
+                            </p>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(item.timestamp), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Analysis Tab */}
+            <TabsContent value="analysis" className="p-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Content Analysis</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Select content from the Saved tab to view detailed analysis
+                  </p>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </ScrollArea>
+        </Tabs>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t p-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={() => chrome.runtime.openOptionsPage()}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function SidePanel() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system">
+        <SidePanelContent />
+        <Toaster position="bottom-center" />
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default SidePanel
+
+
+
+// src/newtab/index.tsx
+// Enhanced new tab page with AI features dashboard
+
+import { useState, useEffect } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { ThemeProvider } from "~components/theme-provider"
+import { motion } from "framer-motion"
+import { Card, CardContent, CardHeader, CardTitle } from "~components/ui/card"
+import { Button } from "~components/ui/button"
+import { Input } from "~components/ui/input"
+import { Badge } from "~components/ui/badge"
+import { Progress } from "~components/ui/progress"
+import {
+  Brain,
+  Search,
+  Plus,
+  TrendingUp,
+  Clock,
+  FileText,
+  BarChart3,
+  Sparkles,
+  ExternalLink,
+  Calendar,
+  Target,
+  Zap,
+  BookOpen,
+  Globe
+} from "lucide-react"
+import { useSupabaseAuth } from "~hooks/useSupabaseAuth"
+import { useExtensionFeatures } from "~hooks/useIntegratedServices"
+import { format } from "date-fns"
+import "~styles/globals.css"
+
+const queryClient = new QueryClient()
+
+function NewTabContent() {
+  const { user } = useSupabaseAuth()
+  const { saved, aiStats, history } = useExtensionFeatures()
+
+  const [greeting, setGreeting] = useState("")
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchEngine, setSearchEngine] = useState("google")
+
+  // Update greeting and time
+  useEffect(() => {
+    const updateGreeting = () => {
+      const hour = new Date().getHours()
+      if (hour < 12) setGreeting("Good morning")
+      else if (hour < 18) setGreeting("Good afternoon")
+      else setGreeting("Good evening")
+    }
+
+    updateGreeting()
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+      updateGreeting()
+    }, 60000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Handle search
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+
+    const searchEngines = {
+      google: `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`,
+      duckduckgo: `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}`,
+      bing: `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}`
+    }
+
+    window.location.href = searchEngines[searchEngine as keyof typeof searchEngines]
+  }
+
+  // Calculate stats
+  const totalSaved = saved.savedItems?.length || 0
+  const todaysSaved = saved.savedItems?.filter(item => {
+    const itemDate = new Date(item.createdAt)
+    const today = new Date()
+    return itemDate.toDateString() === today.toDateString()
+  }).length || 0
+
+  const aiUsagePercentage = aiStats.stats?.tokensUsed
+    ? Math.min((aiStats.stats.tokensUsed / 100000) * 100, 100)
+    : 0
+
+  // Recent activity
+  const recentActivity = history?.slice(0, 5) || []
+
+  // Quick links (could be customizable)
+  const quickLinks = [
+    { name: "Gmail", url: "https://gmail.com", icon: "📧" },
+    { name: "GitHub", url: "https://github.com", icon: "💻" },
+    { name: "ChatGPT", url: "https://chat.openai.com", icon: "🤖" },
+    { name: "YouTube", url: "https://youtube.com", icon: "📺" }
+  ]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+            {greeting}, {user?.user_metadata?.full_name || user?.email?.split('@')[0] || "there"}!
+          </h1>
+          <p className="text-2xl text-muted-foreground">
+            {format(currentTime, "EEEE, MMMM d, yyyy")}
+          </p>
+          <p className="text-4xl font-mono mt-2">
+            {format(currentTime, "HH:mm")}
+          </p>
+        </motion.div>
+
+        {/* Search Bar */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="max-w-2xl mx-auto mb-12"
+        >
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
+            <Input
+              type="text"
+              placeholder="Search the web..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-12 pr-4 py-6 text-lg rounded-full shadow-lg"
+              autoFocus
+            />
+            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
+              {["google", "duckduckgo", "bing"].map((engine) => (
+                <Button
+                  key={engine}
+                  type="button"
+                  size="sm"
+                  variant={searchEngine === engine ? "default" : "ghost"}
+                  className="rounded-full h-8 px-3"
+                  onClick={() => setSearchEngine(engine)}
+                >
+                  {engine.charAt(0).toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          </form>
+        </motion.div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">AI Usage Today</CardTitle>
+                <Brain className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {aiStats.stats?.requestsCount || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">requests</p>
+                <Progress value={aiUsagePercentage} className="mt-2 h-1" />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Saved Content</CardTitle>
+                <FileText className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{totalSaved}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{todaysSaved} today
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Analyses Run</CardTitle>
+                <BarChart3 className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {history?.filter(h => h.type === 'analysis').length || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">this week</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">AI Credits</CardTitle>
+                <Zap className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${aiStats.stats?.costEstimate?.toFixed(2) || '0.00'}
+                </div>
+                <p className="text-xs text-muted-foreground">estimated cost</p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Quick Links */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.6 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  Quick Links
+                  <Button size="icon" variant="ghost">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-2">
+                  {quickLinks.map((link) => (
+                    <Button
+                      key={link.name}
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => window.open(link.url, "_blank")}
+                    >
+                      <span className="mr-2">{link.icon}</span>
+                      {link.name}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* AI Features */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  AI Features
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start"
+                  onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/ai-chat.html") })}
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  AI Chat Assistant
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start"
+                  onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/content-analyzer.html") })}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Content Analyzer
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="w-full justify-start"
+                  onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("tabs/writing-assistant.html") })}
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Writing Assistant
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Recent Activity */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.8 }}
+            className="lg:row-span-2"
+          >
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Recent Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {recentActivity.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      No recent activity
+                    </p>
+                  ) : (
+                    recentActivity.map((item) => (
+                      <div key={item.id} className="flex items-start gap-3">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          {item.type === 'extraction' && <FileText className="h-4 w-4 text-primary" />}
+                          {item.type === 'analysis' && <BarChart3 className="h-4 w-4 text-primary" />}
+                          {item.type === 'ai' && <Brain className="h-4 w-4 text-primary" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(item.timestamp), "h:mm a")}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Productivity Tips */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+            className="lg:col-span-2"
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-primary" />
+                  Today's AI Tip
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-gradient-to-r from-primary/10 to-purple-600/10 p-4 rounded-lg">
+                  <p className="text-sm font-medium mb-2">
+                    💡 Did you know?
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    You can select any text on a webpage and use the AI assistant to summarize,
+                    explain, or translate it instantly. Just look for the floating AI button!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NewTab() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="system">
+        <NewTabContent />
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default NewTab
+
+
+
+// src/__tests__/integrated-services.test.ts
+// Comprehensive tests for all integrated services
+
+import { createAI } from '@matthew.ngo/ai-toolkit'
+import { createStorage } from '@matthew.ngo/chrome-storage'
+import { ContentExtractorService } from '@matthew.ngo/content-extractor'
+import { createAnalysis } from '@matthew.ngo/analysis-toolkit'
+import { aiService, initializeAI } from '~core/ai-service'
+import { contentExtractionService } from '~core/content-extraction-service'
+import { analysisService, initializeAnalysis } from '~core/analysis-service'
+import { initializeStorage, savedContent, aiAnalysisCache } from '~core/storage'
+
+// Mock Chrome APIs
+global.chrome = {
+  runtime: {
+    getManifest: () => ({ version: '1.0.0' }),
+    sendMessage: jest.fn(),
+    onMessage: { addListener: jest.fn() }
+  },
+  storage: {
+    local: {
+      get: jest.fn(),
+      set: jest.fn(),
+      remove: jest.fn()
+    }
+  },
+  tabs: {
+    query: jest.fn(),
+    create: jest.fn()
+  }
+} as any
+
+describe('Integrated Services', () => {
+  beforeAll(async () => {
+    // Initialize all services
+    await initializeStorage()
+    await initializeAI()
+    await initializeAnalysis()
+  })
+
+  describe('AI Service Integration', () => {
+    it('should initialize AI with mock provider', async () => {
+      const mockAI = await createAI({
+        provider: 'mock',
+        responses: new Map([
+          ['test prompt', 'test response']
+        ])
+      })
+
+      const response = await mockAI.generateText('test prompt')
+      expect(response).toBe('test response')
+    })
+
+    it('should cache AI responses', async () => {
+      const prompt = 'What is AI?'
+      const cacheKey = `text:${prompt}:{}`
+
+      // First call - should hit API
+      const response1 = await aiService.generateText(prompt)
+
+      // Check if cached
+      const cached = await aiAnalysisCache.get(cacheKey)
+      expect(cached).toBe(response1)
+
+      // Second call - should hit cache
+      const response2 = await aiService.generateText(prompt)
+      expect(response2).toBe(response1)
+    })
+
+    it('should extract key points from text', async () => {
+      const text = 'AI is transforming technology. Machine learning enables computers to learn. Deep learning mimics neural networks.'
+      const keyPoints = await aiService.extractKeyPoints(text)
+
+      expect(Array.isArray(keyPoints)).toBe(true)
+      expect(keyPoints.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('Content Extraction Integration', () => {
+    it('should extract content from HTML', async () => {
+      const html = `
+        <html>
+          <head><title>Test Article</title></head>
+          <body>
+            <h1>Test Heading</h1>
+            <p>This is test content.</p>
+          </body>
+        </html>
+      `
+
+      const result = await contentExtractionService.extractFromHTML(
+        html,
+        'https://example.com'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.data?.title).toBe('Test Article')
+      expect(result.data?.cleanText).toContain('Test Heading')
+      expect(result.data?.cleanText).toContain('This is test content')
+    })
+
+    it('should cache extracted content', async () => {
+      const url = 'https://example.com/test'
+      const mockContent = {
+        title: 'Cached Article',
+        cleanText: 'Cached content',
+        metadata: { source: url }
+      }
+
+      // Set cache
+      await contentCache.set(url, mockContent)
+
+      // Check if cached
+      const cached = await contentCache.get(url)
+      expect(cached).toEqual(mockContent)
+    })
+  })
+
+  describe('Analysis Service Integration', () => {
+    it('should analyze text with NLP features', async () => {
+      const text = 'This is a great product! I absolutely love it.'
+      const analysis = await analysisService.analyzeText(text, {
+        includeNLP: true,
+        includeSentiment: true
+      })
+
+      expect(analysis.aiAnalysis?.sentiment).toBeDefined()
+      expect(analysis.nlpAnalysis?.sentiment.score).toBeGreaterThan(0)
+    })
+
+    it('should run custom analysis templates', async () => {
+      const result = await analysisService.runCustomAnalysis('toneAnalysis', {
+        content: 'We are excited to announce our new product!'
+      })
+
+      expect(result).toBeDefined()
+    })
+  })
+
+  describe('Storage Integration', () => {
+    it('should save and retrieve content', async () => {
+      const content = {
+        url: 'https://example.com/article',
+        title: 'Test Article',
+        content: { cleanText: 'Article content' },
+        tags: ['test', 'article']
+      }
+
+      const saved = await savedContent.add(content)
+      expect(saved.id).toBeDefined()
+
+      const all = await savedContent.getAll()
+      expect(all).toContainEqual(expect.objectContaining({
+        title: 'Test Article'
+      }))
+    })
+
+    it('should search saved content', async () => {
+      // Add test content
+      await savedContent.add({
+        url: 'https://example.com/search-test',
+        title: 'Quantum Computing Article',
+        content: { cleanText: 'Quantum computing is revolutionary' },
+        tags: ['quantum', 'computing']
+      })
+
+      const results = await savedContent.search('quantum')
+      expect(results.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('End-to-End Integration', () => {
+    it('should extract, analyze, and save content', async () => {
+      const html = `
+        <html>
+          <head><title>AI Revolution</title></head>
+          <body>
+            <article>
+              <h1>The AI Revolution</h1>
+              <p>Artificial Intelligence is transforming our world in unprecedented ways.</p>
+              <p>Machine learning algorithms are becoming more sophisticated every day.</p>
+            </article>
+          </body>
+        </html>
+      `
+
+      // Extract content
+      const extraction = await contentExtractionService.extractFromHTML(
+        html,
+        'https://example.com/ai-article'
+      )
+      expect(extraction.success).toBe(true)
+
+      // Analyze content
+      const analysis = await analysisService.analyzeText(
+        extraction.data!.cleanText
+      )
+      expect(analysis.aiAnalysis).toBeDefined()
+
+      // Save with analysis
+      const saved = await savedContent.add({
+        url: 'https://example.com/ai-article',
+        title: extraction.data!.title,
+        content: extraction.data,
+        analysis: analysis,
+        tags: ['ai', 'technology']
+      })
+
+      expect(saved.id).toBeDefined()
+      expect(saved.analysis).toBeDefined()
+    })
+  })
+})
+
+// Performance tests
+describe('Performance Tests', () => {
+  it('should handle concurrent AI requests', async () => {
+    const prompts = Array(5).fill(null).map((_, i) => `Test prompt ${i}`)
+
+    const startTime = Date.now()
+    const results = await Promise.all(
+      prompts.map(prompt => aiService.generateText(prompt))
+    )
+    const endTime = Date.now()
+
+    expect(results).toHaveLength(5)
+    expect(endTime - startTime).toBeLessThan(5000) // Should complete in 5s
+  })
+
+  it('should efficiently batch extract content', async () => {
+    const urls = [
+      'https://example.com/1',
+      'https://example.com/2',
+      'https://example.com/3'
+    ]
+
+    const results = await contentExtractionService.extractBatch(urls)
+    expect(results).toHaveLength(3)
+  })
+})
+
+// Mock implementations for testing
+class MockAIProvider {
+  async generateText(prompt: string) {
+    return `Mock response to: ${prompt}`
+  }
+
+  async generateEmbedding(text: string) {
+    return Array(1536).fill(0).map(() => Math.random())
+  }
+
+  async analyzeSentiment(text: string) {
+    return {
+      sentiment: 'positive' as const,
+      score: 0.8
+    }
+  }
+}
+
+// Helper functions for testing
+export const testHelpers = {
+  createMockContent() {
+    return {
+      title: 'Test Article',
+      cleanText: 'This is test content for analysis.',
+      metadata: {
+        source: 'https://example.com/test',
+        extractedAt: new Date()
+      },
+      wordCount: 6,
+      readingTime: 1,
+      language: 'en',
+      quality: { score: 0.8 }
+    }
+  },
+
+  createMockAnalysis() {
+    return {
+      id: 'analysis-123',
+      type: 'content',
+      status: 'completed' as const,
+      aiAnalysis: {
+        summary: 'Test summary',
+        keyPoints: ['Point 1', 'Point 2'],
+        sentiment: 'neutral' as const,
+        tone: 'informative',
+        themes: ['testing', 'analysis']
+      },
+      nlpAnalysis: {
+        sentiment: { score: 0, comparative: 0 },
+        language: 'en',
+        readability: { grade: 8, score: 70, difficulty: 'moderate' as const },
+        keywords: [{ word: 'test', count: 2, relevance: 0.9 }],
+        entities: []
+      }
+    }
+  },
+
+  async setupTestEnvironment() {
+    // Initialize with mock providers
+    const mockStorage = createStorage('minimal')
+    const mockAI = new MockAIProvider()
+    const mockExtractor = new ContentExtractorService({ enabled: false })
+
+    return {
+      storage: mockStorage,
+      ai: mockAI,
+      extractor: mockExtractor
+    }
+  }
+}
